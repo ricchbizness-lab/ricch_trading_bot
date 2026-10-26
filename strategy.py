@@ -27,7 +27,8 @@ signals_state = {pair: {
     "source": "—",
 } for pair in PAIRS}
 
-trade_history = []
+trade_history = []   # liste de trades avec statut (open/tp/sl)
+_open_trades  = {}   # pair → trade en cours pour suivi résolution
 
 
 # ── Sources de données ──────────────────────────────────────────────────────
@@ -224,14 +225,47 @@ def run_signals_loop():
                 print(f"  {pair}: {sig.get('signal')} @ {price:.4f} [{source}]")
 
                 current_sig = sig.get("signal", "")
+
+                # ── Résolution des trades ouverts ──
+                if pair in _open_trades:
+                    t = _open_trades[pair]
+                    if price >= t["tp"] and t["tp"] > 0:
+                        t["status"]    = "TP ✅"
+                        t["exit_price"]= round(price, 4)
+                        t["exit_time"] = datetime.now(timezone.utc).isoformat()
+                        t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
+                        del _open_trades[pair]
+                        print(f"  ✅ {pair} TP touché @ {price:.4f}")
+                    elif price <= t["sl"] and t["sl"] > 0:
+                        t["status"]    = "SL ❌"
+                        t["exit_price"]= round(price, 4)
+                        t["exit_time"] = datetime.now(timezone.utc).isoformat()
+                        t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
+                        del _open_trades[pair]
+                        print(f"  ❌ {pair} SL touché @ {price:.4f}")
+
+                # ── Nouveau signal achat ──
                 if "ACHETER" in current_sig and previous_signals[pair] != current_sig:
                     msg = format_signal_message(pair, price, sig)
                     send_telegram(msg)
-                    trade_history.append({
-                        "pair": pair, "action": "ACHAT", "price": price,
-                        "sl": sig.get("sl", 0), "tp": sig.get("tp", 0),
-                        "time": datetime.now(timezone.utc).isoformat(),
-                    })
+                    trade = {
+                        "id":         len(trade_history) + 1,
+                        "pair":       pair,
+                        "action":     "ACHAT",
+                        "entry":      round(price, 4),
+                        "sl":         sig.get("sl", 0),
+                        "tp":         sig.get("tp", 0),
+                        "sl_pct":     sig.get("sl_pct", 0),
+                        "tp_pct":     sig.get("tp_pct", 0),
+                        "rsi":        sig.get("rsi", 0),
+                        "time":       datetime.now(timezone.utc).isoformat(),
+                        "status":     "Ouvert 🔵",
+                        "exit_price": None,
+                        "exit_time":  None,
+                        "pnl_pct":    None,
+                    }
+                    trade_history.append(trade)
+                    _open_trades[pair] = trade
 
                 previous_signals[pair] = current_sig
 
