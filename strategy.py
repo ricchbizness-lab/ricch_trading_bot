@@ -47,24 +47,24 @@ def get_klines(pair_info: dict, limit=100):
 
 
 def _binance_klines(symbol: str, limit=100) -> pd.DataFrame | None:
-    url = "https://api.binance.com/api/v3/klines"
-    try:
-        r = requests.get(url, params={"symbol": symbol, "interval": "1d", "limit": limit}, timeout=8)
-        r.raise_for_status()
-        data = r.json()
-        if not data:
-            return None
-        df = pd.DataFrame(data, columns=[
-            "open_time","open","high","low","close","volume",
-            "close_time","qav","trades","tbbav","tbqav","ignore"
-        ])
-        for col in ["open","high","low","close","volume"]:
-            df[col] = df[col].astype(float)
-        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-        return df.set_index("open_time")
-    except Exception as e:
-        print(f"Binance error {symbol}: {e}")
-        return None
+    for base_url in ["https://api.binance.com/api/v3/klines", "https://api.binance.us/api/v3/klines"]:
+        try:
+            r = requests.get(base_url, params={"symbol": symbol, "interval": "1d", "limit": limit}, timeout=8)
+            r.raise_for_status()
+            data = r.json()
+            if not data:
+                continue
+            df = pd.DataFrame(data, columns=[
+                "open_time","open","high","low","close","volume",
+                "close_time","qav","trades","tbbav","tbqav","ignore"
+            ])
+            for col in ["open","high","low","close","volume"]:
+                df[col] = df[col].astype(float)
+            df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+            return df.set_index("open_time")
+        except Exception as e:
+            print(f"Binance error {symbol} ({base_url}): {e}")
+    return None
 
 
 def _coingecko_ohlc(coin_id: str, limit=100) -> pd.DataFrame | None:
