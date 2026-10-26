@@ -14,11 +14,11 @@ TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 PAIRS = {
-    "BTC/USDT": {"symbol": "BTCUSDT", "emoji": "₿"},
-    "ETH/USDT": {"symbol": "ETHUSDT", "emoji": "Ξ"},
-    "SOL/USDT": {"symbol": "SOLUSDT", "emoji": "◎"},
-    "BNB/USDT": {"symbol": "BNBUSDT", "emoji": "🔶"},
-    "ADA/USDT": {"symbol": "ADAUSDT", "emoji": "₳"},
+    "BTC/USDT": {"symbol": "BTCUSDT", "coingecko": "bitcoin",  "emoji": "₿"},
+    "ETH/USDT": {"symbol": "ETHUSDT", "coingecko": "ethereum", "emoji": "Ξ"},
+    "SOL/USDT": {"symbol": "SOLUSDT", "coingecko": "solana",   "emoji": "◎"},
+    "BNB/USDT": {"symbol": "BNBUSDT", "coingecko": "binancecoin", "emoji": "🔶"},
+    "ADA/USDT": {"symbol": "ADAUSDT", "coingecko": "cardano",  "emoji": "₳"},
 }
 
 # État global des signaux (partagé avec Flask)
@@ -37,12 +37,22 @@ signals_state = {pair: {
 trade_history = []
 
 
-def get_binance_klines(symbol: str, interval="1d", limit=100) -> pd.DataFrame | None:
-    """Récupère les données de prix depuis Binance (API publique, sans clé)."""
-    url = f"https://api.binance.com/api/v3/klines"
-    params = {"symbol": symbol, "interval": interval, "limit": limit}
+def get_klines(pair_info: dict, limit=100) -> pd.DataFrame | None:
+    """Récupère les données OHLC — essaie Binance, fallback CoinGecko."""
+    # Tentative Binance
+    df = _binance_klines(pair_info["symbol"], limit)
+    if df is not None:
+        return df
+    # Fallback CoinGecko (données daily)
+    print(f"Binance indisponible, fallback CoinGecko pour {pair_info['coingecko']}")
+    return _coingecko_ohlc(pair_info["coingecko"], limit)
+
+
+def _binance_klines(symbol: str, limit=100) -> pd.DataFrame | None:
+    url = "https://api.binance.com/api/v3/klines"
+    params = {"symbol": symbol, "interval": "1d", "limit": limit}
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, timeout=8)
         r.raise_for_status()
         data = r.json()
         df = pd.DataFrame(data, columns=[
@@ -52,10 +62,27 @@ def get_binance_klines(symbol: str, interval="1d", limit=100) -> pd.DataFrame | 
         for col in ["open","high","low","close","volume"]:
             df[col] = df[col].astype(float)
         df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-        df = df.set_index("open_time")
-        return df
+        return df.set_index("open_time")
     except Exception as e:
         print(f"Binance error {symbol}: {e}")
+        return None
+
+
+def _coingecko_ohlc(coin_id: str, limit=100) -> pd.DataFrame | None:
+    """CoinGecko OHLC — 90 jours max sur le plan gratuit."""
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
+    params = {"vs_currency": "usd", "days": min(limit, 90)}
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        data = r.json()  # [[timestamp, open, high, low, close], ...]
+        df = pd.DataFrame(data, columns=["open_time","open","high","low","close"])
+        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+        df = df.set_index("open_time")
+        df["volume"] = 0.0
+        return df
+    except Exception as e:
+        print(f"CoinGecko error {coin_id}: {e}")
         return None
 
 
@@ -170,7 +197,7 @@ def run_signals_loop():
 
     while True:
         for pair, info in PAIRS.items():
-            df = get_binance_klines(info["symbol"])
+            df = get_klines(info)
             price = df["close"].iloc[-1] if df is not None else 0
             sig   = compute_signal(df)
 
