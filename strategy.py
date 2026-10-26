@@ -32,7 +32,7 @@ trade_history = []
 
 # ── Sources de données ──────────────────────────────────────────────────────
 
-def get_klines(pair_info: dict, limit=100) -> tuple[pd.DataFrame | None, str]:
+def get_klines(pair_info: dict, limit=100):
     """Essaie Binance → CoinGecko → données synthétiques. Retourne (df, source)."""
     df = _binance_klines(pair_info["symbol"], limit)
     if df is not None:
@@ -201,37 +201,44 @@ def run_signals_loop():
     previous_signals = {pair: None for pair in PAIRS}
 
     while True:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle de mise à jour...")
         for pair, info in PAIRS.items():
-            df, source = get_klines(info)
-            price = float(df["close"].iloc[-1]) if df is not None else 0
-            sig   = compute_signal(df)
+            try:
+                df, source = get_klines(info)
+                price = float(df["close"].iloc[-1]) if df is not None else 0
+                sig   = compute_signal(df)
 
-            signals_state[pair].update({
-                "signal":      sig.get("signal", "ERREUR"),
-                "price":       round(price, 4),
-                "sl":          sig.get("sl", 0),
-                "tp":          sig.get("tp", 0),
-                "sl_pct":      sig.get("sl_pct", 0),
-                "tp_pct":      sig.get("tp_pct", 0),
-                "rsi":         sig.get("rsi", 0),
-                "ema20":       sig.get("ema20", 0),
-                "change_24h":  sig.get("change_24h", 0),
-                "last_update": datetime.now(timezone.utc).isoformat(),
-                "source":      source,
-            })
-
-            current_sig = sig.get("signal", "")
-            if "ACHETER" in current_sig and previous_signals[pair] != current_sig:
-                msg = format_signal_message(pair, price, sig)
-                send_telegram(msg)
-                trade_history.append({
-                    "pair": pair, "action": "ACHAT", "price": price,
-                    "sl": sig.get("sl", 0), "tp": sig.get("tp", 0),
-                    "time": datetime.now(timezone.utc).isoformat(),
+                signals_state[pair].update({
+                    "signal":      sig.get("signal", "ERREUR"),
+                    "price":       round(price, 4),
+                    "sl":          sig.get("sl", 0),
+                    "tp":          sig.get("tp", 0),
+                    "sl_pct":      sig.get("sl_pct", 0),
+                    "tp_pct":      sig.get("tp_pct", 0),
+                    "rsi":         sig.get("rsi", 0),
+                    "ema20":       sig.get("ema20", 0),
+                    "change_24h":  sig.get("change_24h", 0),
+                    "last_update": datetime.now(timezone.utc).isoformat(),
+                    "source":      source,
                 })
+                print(f"  {pair}: {sig.get('signal')} @ {price:.4f} [{source}]")
 
-            previous_signals[pair] = current_sig
-            time.sleep(1)
+                current_sig = sig.get("signal", "")
+                if "ACHETER" in current_sig and previous_signals[pair] != current_sig:
+                    msg = format_signal_message(pair, price, sig)
+                    send_telegram(msg)
+                    trade_history.append({
+                        "pair": pair, "action": "ACHAT", "price": price,
+                        "sl": sig.get("sl", 0), "tp": sig.get("tp", 0),
+                        "time": datetime.now(timezone.utc).isoformat(),
+                    })
+
+                previous_signals[pair] = current_sig
+
+            except Exception as e:
+                print(f"  ❌ Erreur {pair}: {e}")
+
+            time.sleep(2)
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 1h")
         time.sleep(3600)
