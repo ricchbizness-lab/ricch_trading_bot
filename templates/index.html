@@ -408,6 +408,109 @@ header {
   .pair-row > *:nth-child(n+4) { display: none; }
   .ticker-bar { display: none; }
 }
+
+/* ── TOOLTIP ── */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%; transform: translateX(-50%);
+  background: #1a2a40;
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  width: 220px;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+[data-tip]:hover::after { opacity: 1; }
+
+/* ── LEXIQUE PANEL ── */
+.lexique-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px; font-weight: 500;
+  background: rgba(139,92,246,0.1);
+  color: var(--purple);
+  border: 1px solid rgba(139,92,246,0.25);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lexique-btn:hover { background: rgba(139,92,246,0.2); }
+
+.lexique-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+.lexique-overlay.open { display: flex; }
+.lexique-panel {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  width: 560px; max-width: 95vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 28px;
+  position: relative;
+}
+.lexique-panel::-webkit-scrollbar { width: 4px; }
+.lexique-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius:2px; }
+.lexique-close {
+  position: absolute; top: 16px; right: 16px;
+  background: var(--border); border: none;
+  color: var(--muted2); width: 28px; height: 28px;
+  border-radius: 50%; cursor: pointer; font-size: 14px;
+  display: flex; align-items:center; justify-content:center;
+  transition: background 0.15s;
+}
+.lexique-close:hover { background: var(--border2); color: var(--text); }
+.lexique-title {
+  font-size: 16px; font-weight: 700; margin-bottom: 4px;
+}
+.lexique-sub {
+  font-size: 11px; color: var(--muted); margin-bottom: 24px;
+}
+.lex-group { margin-bottom: 20px; }
+.lex-group-title {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); border-bottom: 1px solid var(--border);
+  padding-bottom: 6px; margin-bottom: 12px;
+}
+.lex-entry { margin-bottom: 14px; }
+.lex-term {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--cyan); margin-bottom: 3px;
+  display: flex; align-items: center; gap: 8px;
+}
+.lex-def { font-size: 12px; color: var(--muted2); line-height: 1.6; }
+.lex-example {
+  margin-top: 4px; font-size: 11px;
+  color: var(--muted); font-family: var(--mono);
+  background: var(--bg2); border-radius: 4px; padding: 4px 8px;
+  border-left: 2px solid var(--border2);
+}
+.lex-scale {
+  display: flex; gap: 4px; margin-top: 6px;
+}
+.lex-scale-item {
+  flex: 1; text-align: center; font-size: 10px;
+  padding: 4px 2px; border-radius: 4px;
+}
 </style>
 </head>
 <body>
@@ -446,6 +549,9 @@ header {
     <div class="pill" style="background:rgba(59,130,246,0.1);color:var(--blue);border-color:rgba(59,130,246,0.2)">
       EMA Pullback · Daily
     </div>
+    <button class="lexique-btn" onclick="document.getElementById('lexique').classList.add('open')">
+      📖 Lexique
+    </button>
   </div>
   <div class="header-right">
     <span>Binance · Frankfurt</span>
@@ -453,33 +559,127 @@ header {
   </div>
 </header>
 
+<!-- LEXIQUE OVERLAY -->
+<div class="lexique-overlay" id="lexique" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="lexique-panel">
+    <button class="lexique-close" onclick="document.getElementById('lexique').classList.remove('open')">✕</button>
+    <div class="lexique-title">📖 Lexique du trading</div>
+    <div class="lexique-sub">Tous les termes affichés sur le dashboard expliqués simplement.</div>
+
+    <div class="lex-group">
+      <div class="lex-group-title">Indicateurs techniques</div>
+
+      <div class="lex-entry">
+        <div class="lex-term">RSI <span style="color:var(--muted);font-size:10px">Relative Strength Index</span></div>
+        <div class="lex-def">Mesure si un actif a trop monté (suracheté) ou trop baissé (survendu) récemment. Oscille entre 0 et 100.</div>
+        <div class="lex-scale">
+          <div class="lex-scale-item" style="background:rgba(0,208,132,0.15);color:var(--green)">0–30<br>Survendu<br>↑ Rebond probable</div>
+          <div class="lex-scale-item" style="background:rgba(139,163,188,0.1);color:var(--muted2)">30–70<br>Zone neutre<br>Normal</div>
+          <div class="lex-scale-item" style="background:rgba(255,69,96,0.15);color:var(--red)">70–100<br>Suracheté<br>↓ Correction probable</div>
+        </div>
+        <div class="lex-example">Ex : RSI 37 → zone basse, marché a baissé mais pas encore en signal fort d'achat (notre seuil : &gt;42)</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">EMA <span style="color:var(--muted);font-size:10px">Exponential Moving Average</span></div>
+        <div class="lex-def">Moyenne mobile exponentielle — ligne qui suit la tendance du prix en donnant plus de poids aux données récentes. L'EMA20 suit les 20 derniers jours, l'EMA50 les 50 derniers.</div>
+        <div class="lex-example">Si EMA20 &gt; EMA50 → tendance haussière. Notre bot entre en position quand le prix revient "toucher" l'EMA20 dans ce contexte.</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">ATR <span style="color:var(--muted);font-size:10px">Average True Range</span></div>
+        <div class="lex-def">Mesure la volatilité moyenne d'un actif sur les 14 derniers jours. Plus l'ATR est élevé, plus le marché bouge fort. Le bot l'utilise pour calculer automatiquement où placer les Stop Loss et Take Profit.</div>
+        <div class="lex-example">Ex : BTC ATR = 1 500 $ → en moyenne, BTC bouge de ±1 500 $ par jour.</div>
+      </div>
+    </div>
+
+    <div class="lex-group">
+      <div class="lex-group-title">Gestion du risque</div>
+
+      <div class="lex-entry">
+        <div class="lex-term">SL <span style="color:var(--muted);font-size:10px">Stop Loss</span></div>
+        <div class="lex-def">Prix auquel on coupe la position pour limiter la perte si le marché va dans le mauvais sens. C'est votre filet de sécurité obligatoire.</div>
+        <div class="lex-example">Ex : SL -3.2% → si le prix baisse de 3,2% depuis l'entrée, on vend automatiquement pour ne pas perdre plus.</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">TP <span style="color:var(--muted);font-size:10px">Take Profit</span></div>
+        <div class="lex-def">Prix cible auquel on encaisse le gain. Le bot fixe le TP à environ 4× la distance du Stop Loss (ratio risque/rendement &gt;1:4).</div>
+        <div class="lex-example">Ex : TP +9.8% → si le prix monte de 9,8%, on vend pour sécuriser le gain.</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">Ratio R/R <span style="color:var(--muted);font-size:10px">Risk/Reward</span></div>
+        <div class="lex-def">Rapport entre ce qu'on risque de perdre et ce qu'on peut gagner. Un ratio de 1:3 signifie qu'on risque 1 pour gagner 3 — même avec 40% de trades gagnants, on est rentable.</div>
+        <div class="lex-example">Notre bot vise un ratio minimum de 1:3 sur chaque signal.</div>
+      </div>
+    </div>
+
+    <div class="lex-group">
+      <div class="lex-group-title">Signaux du bot</div>
+
+      <div class="lex-entry">
+        <div class="lex-term">▲ ACHAT</div>
+        <div class="lex-def">Le bot a détecté les 3 conditions EMA Pullback : tendance haussière (EMA20 &gt; EMA50), prix qui revient toucher l'EMA20, et RSI &gt; 42. En conditions réelles, c'est ici qu'on entrerait en position.</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">▼ VENTE</div>
+        <div class="lex-def">La tendance est baissière (EMA20 &lt; EMA50) ou le prix est sous l'EMA50. Le bot ne prend pas de positions dans ce contexte.</div>
+      </div>
+
+      <div class="lex-entry">
+        <div class="lex-term">● NEUTRE</div>
+        <div class="lex-def">Tendance haussière présente mais le prix n'a pas encore fait de pullback sur l'EMA20. On attend une meilleure entrée.</div>
+      </div>
+    </div>
+
+    <div class="lex-group">
+      <div class="lex-group-title">Stratégie EMA Pullback</div>
+      <div class="lex-entry">
+        <div class="lex-def" style="line-height:1.8">
+          La stratégie fonctionne en 3 étapes :<br>
+          <strong style="color:var(--text)">1. Identifier la tendance</strong> → EMA20 au-dessus de l'EMA50 sur le graphique journalier<br>
+          <strong style="color:var(--text)">2. Attendre le pullback</strong> → le prix revient "toucher" l'EMA20 (petite correction dans la tendance)<br>
+          <strong style="color:var(--text)">3. Entrer en position</strong> → RSI confirme que la correction n'est pas un retournement<br><br>
+          L'idée : acheter une correction dans une tendance haussière, pas au sommet.
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px;padding-top:16px;border-top:1px solid var(--border)">
+      Ce dashboard est en mode simulation — aucun trade réel n'est exécuté.
+    </div>
+  </div>
+</div>
+
 <!-- LAYOUT -->
 <div class="layout">
 
   <!-- STAT BAR -->
   <div class="stat-bar">
-    <div class="stat-item">
-      <div class="stat-label">Signaux Achat</div>
+    <div class="stat-item" data-tip="Nombre de paires où le bot a détecté une opportunité d'achat (EMA Pullback confirmé)">
+      <div class="stat-label">Signaux Achat ⓘ</div>
       <div class="stat-value green" id="s-buy">—</div>
       <div class="stat-sub">actifs maintenant</div>
     </div>
-    <div class="stat-item">
-      <div class="stat-label">Signaux Vente</div>
+    <div class="stat-item" data-tip="Nombre de paires en tendance baissière — le bot évite d'acheter dans ce contexte">
+      <div class="stat-label">Signaux Vente ⓘ</div>
       <div class="stat-value red" id="s-sell">—</div>
       <div class="stat-sub">actifs maintenant</div>
     </div>
-    <div class="stat-item">
-      <div class="stat-label">Neutres</div>
+    <div class="stat-item" data-tip="Paires en tendance haussière mais sans pullback sur l'EMA20 — on attend une meilleure entrée">
+      <div class="stat-label">Neutres ⓘ</div>
       <div class="stat-value" style="color:var(--muted2)" id="s-neu">—</div>
       <div class="stat-sub">en attente</div>
     </div>
-    <div class="stat-item">
-      <div class="stat-label">Trades journalisés</div>
+    <div class="stat-item" data-tip="Nombre de signaux ACHAT enregistrés depuis le démarrage. En simulation : aucun trade réel n'est passé.">
+      <div class="stat-label">Trades journalisés ⓘ</div>
       <div class="stat-value blue" id="s-trades">—</div>
       <div class="stat-sub">signaux achat envoyés</div>
     </div>
-    <div class="stat-item">
-      <div class="stat-label">Source données</div>
+    <div class="stat-item" data-tip="D'où viennent les prix : Binance (temps réel, idéal), CoinGecko (fallback si Binance indispo), Synthétique (simulation si aucune API disponible)">
+      <div class="stat-label">Source données ⓘ</div>
       <div class="stat-value" style="font-size:16px;color:var(--cyan)" id="s-source">—</div>
       <div class="stat-sub" id="s-update">dernière mise à jour —</div>
     </div>
@@ -490,12 +690,12 @@ header {
     <!-- Header row -->
     <div class="pair-row row-header">
       <div class="col-label">Paire</div>
-      <div class="col-label">Prix</div>
-      <div class="col-label">24h</div>
-      <div class="col-label">RSI</div>
-      <div class="col-label">Signal</div>
-      <div class="col-label">SL / TP</div>
-      <div class="col-label">Tendance</div>
+      <div class="col-label" data-tip="Prix actuel de l'actif en dollars (source : Binance temps réel)">Prix ⓘ</div>
+      <div class="col-label" data-tip="Variation du prix sur les dernières 24 heures en %">24h ⓘ</div>
+      <div class="col-label" data-tip="RSI (Relative Strength Index) : indicateur de momentum 0–100. &lt;30 = survendu (rebond probable), &gt;70 = suracheté (correction probable). Notre bot achète quand RSI &gt; 42.">RSI ⓘ</div>
+      <div class="col-label" data-tip="Signal généré par la stratégie EMA Pullback : ACHAT (entrée détectée), VENTE (tendance baissière), NEUTRE (en attente). Cliquez sur 📖 Lexique pour comprendre chaque signal.">Signal ⓘ</div>
+      <div class="col-label" data-tip="SL = Stop Loss : prix de sortie si ça baisse (limite la perte). TP = Take Profit : objectif de gain. Le bot vise un ratio risque/récompense d'au moins 1:3.">SL / TP ⓘ</div>
+      <div class="col-label" data-tip="Mini-graphe des derniers prix observés depuis le démarrage du dashboard. Vert = tendance haussière, Rouge = tendance baissière.">Tendance ⓘ</div>
     </div>
     <div id="pairs-container"></div>
   </div>
