@@ -7,6 +7,18 @@ from strategy import signals_state, trade_history, run_signals_loop
 
 app = Flask(__name__)
 
+# Démarre le bot au chargement du module (compatible Gunicorn)
+_bot_started = False
+def _start_bot():
+    global _bot_started
+    if not _bot_started:
+        _bot_started = True
+        t = threading.Thread(target=run_signals_loop, daemon=True)
+        t.start()
+        print("🤖 Thread bot démarré")
+
+_start_bot()
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -17,14 +29,11 @@ def api_signals():
 
 @app.route("/api/history")
 def api_history():
-    return jsonify(trade_history[-50:])  # 50 derniers trades
+    return jsonify(trade_history[-50:])
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "bot_started": _bot_started})
 
 if __name__ == "__main__":
-    # Lancer le bot en arrière-plan
-    bot_thread = threading.Thread(target=run_signals_loop, daemon=True)
-    bot_thread.start()
     app.run(host="0.0.0.0", port=10000)
