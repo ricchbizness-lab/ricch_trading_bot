@@ -7,54 +7,53 @@ import pandas as pd
 import requests
 import os
 import time
-import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 PAIRS = {
-    "BTC/USDT": {"symbol": "BTCUSDT", "coingecko": "bitcoin",  "emoji": "₿"},
-    "ETH/USDT": {"symbol": "ETHUSDT", "coingecko": "ethereum", "emoji": "Ξ"},
-    "SOL/USDT": {"symbol": "SOLUSDT", "coingecko": "solana",   "emoji": "◎"},
-    "BNB/USDT": {"symbol": "BNBUSDT", "coingecko": "binancecoin", "emoji": "🔶"},
-    "ADA/USDT": {"symbol": "ADAUSDT", "coingecko": "cardano",  "emoji": "₳"},
+    "BTC/USDT": {"symbol": "BTCUSDT", "coingecko": "bitcoin",     "emoji": "₿",  "ref_price": 67000, "vol": 0.028},
+    "ETH/USDT": {"symbol": "ETHUSDT", "coingecko": "ethereum",    "emoji": "Ξ",  "ref_price":  3500, "vol": 0.033},
+    "SOL/USDT": {"symbol": "SOLUSDT", "coingecko": "solana",      "emoji": "◎",  "ref_price":   175, "vol": 0.042},
+    "BNB/USDT": {"symbol": "BNBUSDT", "coingecko": "binancecoin", "emoji": "🔶", "ref_price":   580, "vol": 0.026},
+    "ADA/USDT": {"symbol": "ADAUSDT", "coingecko": "cardano",     "emoji": "₳",  "ref_price":  0.45, "vol": 0.040},
 }
 
 # État global des signaux (partagé avec Flask)
 signals_state = {pair: {
-    "signal": "NEUTRE",
-    "price": 0,
-    "sl": 0,
-    "tp": 0,
-    "change_24h": 0,
-    "last_update": None,
-    "in_trade": False,
-    "entry_price": 0,
-    "pnl_pct": 0,
+    "signal": "NEUTRE", "price": 0, "sl": 0, "tp": 0,
+    "change_24h": 0, "last_update": None, "rsi": 0,
+    "source": "—",
 } for pair in PAIRS}
 
 trade_history = []
 
 
-def get_klines(pair_info: dict, limit=100) -> pd.DataFrame | None:
-    """Récupère les données OHLC — essaie Binance, fallback CoinGecko."""
-    # Tentative Binance
+# ── Sources de données ──────────────────────────────────────────────────────
+
+def get_klines(pair_info: dict, limit=100) -> tuple[pd.DataFrame | None, str]:
+    """Essaie Binance → CoinGecko → données synthétiques. Retourne (df, source)."""
     df = _binance_klines(pair_info["symbol"], limit)
     if df is not None:
-        return df
-    # Fallback CoinGecko (données daily)
-    print(f"Binance indisponible, fallback CoinGecko pour {pair_info['coingecko']}")
-    return _coingecko_ohlc(pair_info["coingecko"], limit)
+        return df, "Binance"
+
+    df = _coingecko_ohlc(pair_info["coingecko"], limit)
+    if df is not None:
+        return df, "CoinGecko"
+
+    print(f"[{pair_info['symbol']}] Toutes les APIs inaccessibles — données synthétiques")
+    return _synthetic_ohlc(pair_info["ref_price"], pair_info["vol"], limit), "Synthétique"
 
 
 def _binance_klines(symbol: str, limit=100) -> pd.DataFrame | None:
     url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": symbol, "interval": "1d", "limit": limit}
     try:
-        r = requests.get(url, params=params, timeout=8)
+        r = requests.get(url, params={"symbol": symbol, "interval": "1d", "limit": limit}, timeout=8)
         r.raise_for_status()
         data = r.json()
+        if not data:
+            return None
         df = pd.DataFrame(data, columns=[
             "open_time","open","high","low","close","volume",
             "close_time","qav","trades","tbbav","tbqav","ignore"
@@ -69,13 +68,13 @@ def _binance_klines(symbol: str, limit=100) -> pd.DataFrame | None:
 
 
 def _coingecko_ohlc(coin_id: str, limit=100) -> pd.DataFrame | None:
-    """CoinGecko OHLC — 90 jours max sur le plan gratuit."""
     url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
-    params = {"vs_currency": "usd", "days": min(limit, 90)}
     try:
-        r = requests.get(url, params=params, timeout=15)
+        r = requests.get(url, params={"vs_currency": "usd", "days": min(limit, 90)}, timeout=15)
         r.raise_for_status()
-        data = r.json()  # [[timestamp, open, high, low, close], ...]
+        data = r.json()
+        if not data:
+            return None
         df = pd.DataFrame(data, columns=["open_time","open","high","low","close"])
         df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
         df = df.set_index("open_time")
@@ -86,8 +85,25 @@ def _coingecko_ohlc(coin_id: str, limit=100) -> pd.DataFrame | None:
         return None
 
 
+def _synthetic_ohlc(ref_price: float, daily_vol: float, n: int = 100) -> pd.DataFrame:
+    """GBM réaliste avec tendance haussière légère (pour démo)."""
+    rng = np.random.default_rng(42)
+    mu = 0.0003  # drift légèrement positif
+    returns = rng.normal(mu, daily_vol, n)
+    closes = ref_price * np.exp(np.cumsum(returns))
+    highs  = closes * (1 + abs(rng.normal(0, daily_vol * 0.5, n)))
+    lows   = closes * (1 - abs(rng.normal(0, daily_vol * 0.5, n)))
+    opens  = np.roll(closes, 1); opens[0] = ref_price
+
+    dates = [datetime.now(timezone.utc) - timedelta(days=n - i) for i in range(n)]
+    return pd.DataFrame({
+        "open": opens, "high": highs, "low": lows, "close": closes, "volume": 0.0
+    }, index=pd.DatetimeIndex(dates))
+
+
+# ── Stratégie ───────────────────────────────────────────────────────────────
+
 def compute_signal(df: pd.DataFrame) -> dict:
-    """Calcule le signal EMA Pullback pour une paire."""
     if df is None or len(df) < 55:
         return {"signal": "DONNÉES MANQUANTES", "sl": 0, "tp": 0}
 
@@ -95,110 +111,99 @@ def compute_signal(df: pd.DataFrame) -> dict:
     high  = df["high"].values
     low   = df["low"].values
 
-    # EMA
     ema20 = pd.Series(close).ewm(span=20, adjust=False).mean().values
     ema50 = pd.Series(close).ewm(span=50, adjust=False).mean().values
 
-    # ATR
     h, l, c = pd.Series(high), pd.Series(low), pd.Series(close)
-    tr  = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
+    tr  = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
     atr = tr.ewm(span=14, adjust=False).mean().values
 
-    # RSI
-    s = pd.Series(close).diff()
-    g = s.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
+    s  = pd.Series(close).diff()
+    g  = s.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
     lo = (-s.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
-    rsi = (100 - 100/(1 + g/lo.replace(0, 1e-10))).values
+    rsi = (100 - 100 / (1 + g / lo.replace(0, 1e-10))).values
 
     price   = close[-1]
-    e20     = ema20[-1]; e20_3 = ema20[-3]
-    e50     = ema50[-1]; e50_3 = ema50[-3]
-    atr_val = atr[-1]
-    rsi_val = rsi[-1]
-    low_cur = low[-1]
+    e20, e20_3 = ema20[-1], ema20[-3]
+    e50, e50_3 = ema50[-1], ema50[-3]
+    atr_val    = atr[-1]
+    rsi_val    = rsi[-1]
+    low_cur    = low[-1]
 
-    # Conditions
     uptrend  = e20 > e50 and e20 > e20_3 and e50 > e50_3
     pullback = low_cur <= e20 * 1.005 and price > e20 * 0.97
     rsi_ok   = rsi_val > 42
 
-    sl = min(e20 - 2.5 * atr_val, price * 0.96)
-    tp = price + 4.0 * atr_val
+    sl   = min(e20 - 2.5 * atr_val, price * 0.96)
+    tp   = price + 4.0 * atr_val
     risk = price - sl
     if (tp - price) / max(risk, 1e-10) < 1.3:
         tp = price + 1.5 * risk
 
     change_24h = (close[-1] / close[-2] - 1) * 100 if len(close) > 1 else 0
 
+    base = {
+        "rsi": round(rsi_val, 1),
+        "ema20": round(e20, 4),
+        "change_24h": round(change_24h, 2),
+        "sl": 0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
+    }
+
     if uptrend and pullback and rsi_ok:
-        return {
-            "signal":     "ACHETER 🟢",
-            "sl":         round(sl, 4),
-            "tp":         round(tp, 4),
-            "sl_pct":     round((price - sl) / price * 100, 2),
-            "tp_pct":     round((tp - price) / price * 100, 2),
-            "rsi":        round(rsi_val, 1),
-            "ema20":      round(e20, 4),
-            "change_24h": round(change_24h, 2),
+        return {**base,
+            "signal":  "ACHETER 🟢",
+            "sl":      round(sl, 4),
+            "tp":      round(tp, 4),
+            "sl_pct":  round((price - sl) / price * 100, 2),
+            "tp_pct":  round((tp - price) / price * 100, 2),
         }
     elif not uptrend or price < e50 * 0.99:
-        return {
-            "signal":     "VENDRE 🔴",
-            "sl":         0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
-            "rsi":        round(rsi_val, 1),
-            "ema20":      round(e20, 4),
-            "change_24h": round(change_24h, 2),
-        }
+        return {**base, "signal": "VENDRE 🔴"}
     else:
-        return {
-            "signal":     "NEUTRE ⚪",
-            "sl":         0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
-            "rsi":        round(rsi_val, 1),
-            "ema20":      round(e20, 4),
-            "change_24h": round(change_24h, 2),
-        }
+        return {**base, "signal": "NEUTRE ⚪"}
 
+
+# ── Telegram ────────────────────────────────────────────────────────────────
 
 def send_telegram(message: str):
-    """Envoie un message sur Telegram."""
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print(f"[Telegram désactivé] {message}")
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "placeholder":
+        print(f"[Telegram désactivé] {message[:80]}")
         return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        requests.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "HTML"
-        }, timeout=10)
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"},
+            timeout=10
+        )
     except Exception as e:
         print(f"Telegram error: {e}")
 
 
 def format_signal_message(pair: str, price: float, sig: dict) -> str:
     emoji = PAIRS[pair]["emoji"]
+    sl_tp = (f"🛑 Stop Loss  : {sig['sl']:,.4f} $ (-{sig['sl_pct']}%)\n"
+             f"🎯 Take Profit: {sig['tp']:,.4f} $ (+{sig['tp_pct']}%)\n"
+             if sig.get("sl") else "")
     return (
-        f"{emoji} <b>{pair}</b>\n"
-        f"━━━━━━━━━━━━━━\n"
+        f"{emoji} <b>{pair}</b>\n━━━━━━━━━━━━━━\n"
         f"Signal : <b>{sig['signal']}</b>\n"
-        f"Prix   : <b>{price:,.2f} $</b>\n"
+        f"Prix   : <b>{price:,.4f} $</b>\n"
         f"RSI    : {sig.get('rsi', 'N/A')}\n"
-        + (f"🛑 Stop Loss  : {sig['sl']:,.2f} $ (-{sig['sl_pct']}%)\n"
-           f"🎯 Take Profit: {sig['tp']:,.2f} $ (+{sig['tp_pct']}%)\n"
-           if sig.get('sl') else "") +
+        f"{sl_tp}"
         f"📅 {datetime.now(timezone.utc).strftime('%d/%m %H:%M')} UTC"
     )
 
 
+# ── Boucle principale ────────────────────────────────────────────────────────
+
 def run_signals_loop():
-    """Boucle principale — tourne en arrière-plan toutes les heures."""
     print("🤖 Bot de signaux démarré")
     previous_signals = {pair: None for pair in PAIRS}
 
     while True:
         for pair, info in PAIRS.items():
-            df = get_klines(info)
-            price = df["close"].iloc[-1] if df is not None else 0
+            df, source = get_klines(info)
+            price = float(df["close"].iloc[-1]) if df is not None else 0
             sig   = compute_signal(df)
 
             signals_state[pair].update({
@@ -212,24 +217,21 @@ def run_signals_loop():
                 "ema20":       sig.get("ema20", 0),
                 "change_24h":  sig.get("change_24h", 0),
                 "last_update": datetime.now(timezone.utc).isoformat(),
+                "source":      source,
             })
 
-            # Envoie Telegram seulement si le signal change
             current_sig = sig.get("signal", "")
             if "ACHETER" in current_sig and previous_signals[pair] != current_sig:
                 msg = format_signal_message(pair, price, sig)
                 send_telegram(msg)
                 trade_history.append({
-                    "pair":   pair,
-                    "action": "ACHAT",
-                    "price":  price,
-                    "sl":     sig.get("sl", 0),
-                    "tp":     sig.get("tp", 0),
-                    "time":   datetime.now(timezone.utc).isoformat(),
+                    "pair": pair, "action": "ACHAT", "price": price,
+                    "sl": sig.get("sl", 0), "tp": sig.get("tp", 0),
+                    "time": datetime.now(timezone.utc).isoformat(),
                 })
 
             previous_signals[pair] = current_sig
             time.sleep(1)
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Signaux mis à jour")
-        time.sleep(3600)  # Attendre 1 heure
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 1h")
+        time.sleep(3600)
