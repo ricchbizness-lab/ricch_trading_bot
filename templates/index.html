@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RicchTrading — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #12121a;
+    --border:   #1e1e2e;
+    --text:     #e2e2f0;
+    --muted:    #6b6b8a;
+    --green:    #00e5a0;
+    --red:      #ff4d6d;
+    --yellow:   #ffd166;
+    --blue:     #4d9eff;
+    --purple:   #9d7fff;
+    --radius:   12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .logo-dot {
+    width: 10px; height: 10px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  #last-update {
+    color: var(--green);
+    font-weight: 500;
+  }
+
+  /* ── Layout ── */
+  main {
+    padding: 28px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── Stat tiles ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .stat-sub {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .green { color: var(--green); }
+  .red   { color: var(--red);   }
+  .blue  { color: var(--blue);  }
+  .yellow{ color: var(--yellow);}
+
+  /* ── Grille principale ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+  }
+  .card-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Tableau paires ── */
+  .pairs-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .pairs-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    padding: 0 12px 12px 0;
+    font-weight: 500;
+  }
+  .pairs-table td {
+    padding: 14px 12px 14px 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .pair-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+  }
+  .pair-icon {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    background: var(--border);
+  }
+  .signal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .signal-buy   { background: rgba(0,229,160,0.12); color: var(--green); }
+  .signal-sell  { background: rgba(255,77,109,0.12); color: var(--red);  }
+  .signal-neutral { background: var(--border); color: var(--muted); }
+
+  /* ── Sidebar signaux ── */
+  .signal-detail {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.2s;
+  }
+  .signal-detail:hover { border-color: var(--purple); }
+  .signal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .signal-pair { font-weight: 700; font-size: 0.92rem; }
+  .signal-price { font-size: 0.85rem; color: var(--muted); }
+  .signal-levels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    font-size: 0.75rem;
+  }
+  .level-box {
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .level-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; }
+  .level-val   { font-weight: 600; margin-top: 2px; }
+
+  /* ── Historique ── */
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-pair { font-weight: 600; }
+  .history-time { color: var(--muted); font-size: 0.72rem; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+    header { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    RicchTrading
+    <span style="font-weight:400; color:var(--muted); font-size:0.85rem;">Dashboard</span>
+  </div>
+  <div class="header-right">
+    <span>Mise à jour : <span id="last-update">—</span></span>
+    <span id="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-tile">
+      <div class="stat-label">Signaux actifs</div>
+      <div class="stat-value green" id="active-signals">—</div>
+      <div class="stat-sub">ACHETER détectés</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Trades historique</div>
+      <div class="stat-value blue" id="total-trades">—</div>
+      <div class="stat-sub">signaux envoyés</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Paires suivies</div>
+      <div class="stat-value purple">5</div>
+      <div class="stat-sub">BTC · ETH · SOL · BNB · ADA</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Stratégie</div>
+      <div class="stat-value" style="font-size:1.1rem; color:var(--text)">EMA Pullback</div>
+      <div class="stat-sub">Daily · ATR stops</div>
+    </div>
+  </div>
+
+  <!-- Grille principale -->
+  <div class="main-grid">
+
+    <!-- Tableau paires -->
+    <div>
+      <div class="card">
+        <div class="card-title">Marchés en temps réel</div>
+        <table class="pairs-table">
+          <thead>
+            <tr>
+              <th>Paire</th>
+              <th>Prix</th>
+              <th>24h</th>
+              <th>RSI</th>
+              <th>Signal</th>
+              <th>SL / TP</th>
+            </tr>
+          </thead>
+          <tbody id="pairs-tbody">
+            <tr><td colspan="6" style="color:var(--muted);padding:20px 0">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <!-- Signaux actifs -->
+      <div class="card">
+        <div class="card-title">Signaux ACHAT</div>
+        <div id="active-signals-list">
+          <div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:20px 0">
+            Aucun signal d'achat actif
+          </div>
+        </div>
+      </div>
+
+      <!-- Historique -->
+      <div class="card">
+        <div class="card-title">Historique signaux</div>
+        <div id="history-list">
+          <div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:20px 0">
+            Aucun signal envoyé
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+const PAIR_EMOJIS = {
+  "BTC/USDT": "₿", "ETH/USDT": "Ξ",
+  "SOL/USDT": "◎", "BNB/USDT": "🔶", "ADA/USDT": "₳"
+};
+
+function fmtPrice(p) {
+  if (p >= 1000) return p.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' $';
+  if (p >= 1)    return p.toFixed(4) + ' $';
+  return p.toFixed(5) + ' $';
+}
+
+function signalClass(sig) {
+  if (sig.includes('ACHETER')) return 'signal-buy';
+  if (sig.includes('VENDRE'))  return 'signal-sell';
+  return 'signal-neutral';
+}
+
+function rsiColor(rsi) {
+  if (rsi > 70) return 'var(--red)';
+  if (rsi < 35) return 'var(--green)';
+  return 'var(--text)';
+}
+
+async function updateSignals() {
+  try {
+    const [sigRes, histRes] = await Promise.all([
+      fetch('/api/signals'), fetch('/api/history')
+    ]);
+    const signals = await sigRes.json();
+    const history = await histRes.json();
+
+    // Tableau paires
+    const tbody = document.getElementById('pairs-tbody');
+    let rows = '', buyCount = 0;
+    const buySignals = [];
+
+    for (const [pair, s] of Object.entries(signals)) {
+      const sigClass = signalClass(s.signal || '');
+      if (s.signal && s.signal.includes('ACHETER')) { buyCount++; buySignals.push([pair, s]); }
+
+      const change = s.change_24h || 0;
+      const changeColor = change >= 0 ? 'var(--green)' : 'var(--red)';
+      const changeSign  = change >= 0 ? '+' : '';
+
+      const slTp = s.sl && s.tp
+        ? `<span style="color:var(--red);font-size:0.75rem">-${s.sl_pct}%</span>
+           <span style="color:var(--muted)"> / </span>
+           <span style="color:var(--green);font-size:0.75rem">+${s.tp_pct}%</span>`
+        : `<span style="color:var(--muted)">—</span>`;
+
+      rows += `<tr>
+        <td><div class="pair-name">
+          <div class="pair-icon">${PAIR_EMOJIS[pair]||'?'}</div>
+          <div><div>${pair}</div></div>
+        </div></td>
+        <td style="font-weight:600">${s.price ? fmtPrice(s.price) : '—'}</td>
+        <td style="color:${changeColor}">${changeSign}${change.toFixed(2)}%</td>
+        <td style="color:${rsiColor(s.rsi||50)};font-weight:600">${s.rsi||'—'}</td>
+        <td><span class="signal-badge ${sigClass}">${s.signal||'—'}</span></td>
+        <td>${slTp}</td>
+      </tr>`;
+    }
+    tbody.innerHTML = rows || '<tr><td colspan="6" style="color:var(--muted)">Aucune donnée</td></tr>';
+
+    // Stats
+    document.getElementById('active-signals').textContent = buyCount;
+    document.getElementById('total-trades').textContent = history.length;
+
+    // Signaux achat
+    const buyList = document.getElementById('active-signals-list');
+    if (buySignals.length === 0) {
+      buyList.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:16px 0">Aucun signal d\'achat actif</div>';
+    } else {
+      buyList.innerHTML = buySignals.map(([pair, s]) => `
+        <div class="signal-detail">
+          <div class="signal-header">
+            <div class="signal-pair">${PAIR_EMOJIS[pair]} ${pair}</div>
+            <div class="signal-price">${fmtPrice(s.price)}</div>
+          </div>
+          <div class="signal-levels">
+            <div class="level-box">
+              <div class="level-label">Stop Loss</div>
+              <div class="level-val red">${fmtPrice(s.sl)} <span style="color:var(--muted)">(-${s.sl_pct}%)</span></div>
+            </div>
+            <div class="level-box">
+              <div class="level-label">Take Profit</div>
+              <div class="level-val green">${fmtPrice(s.tp)} <span style="color:var(--muted)">(+${s.tp_pct}%)</span></div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Historique
+    const histList = document.getElementById('history-list');
+    const rev = [...history].reverse().slice(0, 8);
+    if (rev.length === 0) {
+      histList.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:16px 0">Aucun signal envoyé</div>';
+    } else {
+      histList.innerHTML = rev.map(t => {
+        const d = new Date(t.time);
+        const fmt = d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' +
+                    d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+        return `<div class="history-item">
+          <div>
+            <div class="history-pair">${PAIR_EMOJIS[t.pair]||''} ${t.pair}</div>
+            <div class="history-time">${fmt}</div>
+          </div>
+          <div>
+            <span class="signal-badge signal-buy">${t.action}</span>
+            <div style="font-size:0.72rem;color:var(--muted);text-align:right;margin-top:2px">${fmtPrice(t.price)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Heure mise à jour
+    const now = new Date();
+    document.getElementById('last-update').textContent =
+      now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('status-dot').style.background = 'var(--red)';
+  }
+}
+
+// Mise à jour toutes les 30 secondes
+updateSignals();
+setInterval(updateSignals, 30000);
+</script>
+</body>
+</html>
