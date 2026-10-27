@@ -6,11 +6,16 @@ import numpy as np
 import pandas as pd
 import requests
 import os
+import json
 import time
 from datetime import datetime, timezone, timedelta
 
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# Fichier de persistance (survit aux redémarrages Render si /tmp non purgé,
+# ou mieux : monter un Render Disk sur /data)
+PERSIST_FILE = os.environ.get("PERSIST_FILE", "/tmp/ricch_trades.json")
 
 PAIRS = {
     "BTC/USDT": {"symbol": "BTCUSDT", "coingecko": "bitcoin",     "emoji": "₿",  "ref_price": 67000, "vol": 0.028},
@@ -29,6 +34,33 @@ signals_state = {pair: {
 
 trade_history = []   # liste de trades avec statut (open/tp/sl)
 _open_trades  = {}   # pair → trade en cours pour suivi résolution
+
+
+# ── Persistance JSON ─────────────────────────────────────────────────────────
+
+def _load_persist():
+    """Charge trade_history et _open_trades depuis le fichier JSON au démarrage."""
+    global trade_history, _open_trades
+    try:
+        if os.path.exists(PERSIST_FILE):
+            with open(PERSIST_FILE, "r") as f:
+                data = json.load(f)
+            trade_history = data.get("trade_history", [])
+            _open_trades  = data.get("open_trades", {})
+            print(f"✅ Persistance chargée : {len(trade_history)} trades, {len(_open_trades)} ouverts")
+    except Exception as e:
+        print(f"⚠ Erreur chargement persistance : {e}")
+
+def _save_persist():
+    """Sauvegarde trade_history et _open_trades dans le fichier JSON."""
+    try:
+        with open(PERSIST_FILE, "w") as f:
+            json.dump({"trade_history": trade_history, "open_trades": _open_trades}, f)
+    except Exception as e:
+        print(f"⚠ Erreur sauvegarde persistance : {e}")
+
+# Chargement au démarrage du module
+_load_persist()
 
 
 # ── Sources de données ──────────────────────────────────────────────────────
@@ -235,6 +267,7 @@ def run_signals_loop():
                         t["exit_time"] = datetime.now(timezone.utc).isoformat()
                         t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
                         del _open_trades[pair]
+                        _save_persist()
                         print(f"  ✅ {pair} TP touché @ {price:.4f}")
                     elif price <= t["sl"] and t["sl"] > 0:
                         t["status"]    = "SL ❌"
@@ -242,6 +275,7 @@ def run_signals_loop():
                         t["exit_time"] = datetime.now(timezone.utc).isoformat()
                         t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
                         del _open_trades[pair]
+                        _save_persist()
                         print(f"  ❌ {pair} SL touché @ {price:.4f}")
 
                 # ── Nouveau signal achat ──
@@ -266,6 +300,7 @@ def run_signals_loop():
                     }
                     trade_history.append(trade)
                     _open_trades[pair] = trade
+                    _save_persist()
 
                 previous_signals[pair] = current_sig
 
@@ -274,5 +309,5 @@ def run_signals_loop():
 
             time.sleep(2)
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 1h")
-        time.sleep(3600)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 5 min")
+        time.sleep(300)

@@ -840,9 +840,12 @@ function buildPairs(signals){
   // KPIs
   let buy=0,sell=0,neu=0,srcs=new Set();
   const buyList=[];
+  let totalPrices=0, loadedPrices=0;
   Object.entries(signals).forEach(([p,s])=>{
     if(!s)return;
-    if(s.source)srcs.add(s.source);
+    totalPrices++;
+    if(s.price&&s.price>0) loadedPrices++;
+    if(s.source&&s.source!=='—')srcs.add(s.source);
     if(s.signal?.includes('ACHETER')){buy++;buyList.push([p,s]);}
     else if(s.signal?.includes('VENDRE'))sell++;
     else neu++;
@@ -851,7 +854,13 @@ function buildPairs(signals){
   document.getElementById('kpi-sell').textContent=sell;
   document.getElementById('kpi-neu').textContent=neu;
   document.getElementById('kpi-src').textContent=[...srcs].join('·')||'—';
-  document.getElementById('last-update-txt').textContent='Mis à jour '+new Date().toLocaleTimeString('fr-FR');
+  const allLoaded = loadedPrices === totalPrices && totalPrices > 0;
+  document.getElementById('last-update-txt').textContent = allLoaded
+    ? 'Mis à jour '+new Date().toLocaleTimeString('fr-FR')
+    : `⏳ Bot en démarrage… (${loadedPrices}/${totalPrices} paires chargées)`;
+  document.getElementById('bar-status').textContent = allLoaded
+    ? 'Mis à jour à '+new Date().toLocaleTimeString('fr-FR')
+    : `⏳ Premier cycle en cours — données dans quelques secondes (${loadedPrices}/${totalPrices})`;
 
   // Buy cards
   const sec=document.getElementById('buy-section');
@@ -991,7 +1000,8 @@ async function refresh(){
     buildPairs(signals);
     document.getElementById('bar-status').textContent='Mis à jour à '+new Date().toLocaleTimeString('fr-FR');
   }catch(e){
-    document.getElementById('bar-status').textContent='⚠ Erreur réseau — nouvelle tentative...';
+    document.getElementById('bar-status').textContent='⚠ Erreur réseau — nouvelle tentative dans '+cd+'s';
+    document.getElementById('last-update-txt').textContent='⚠ Erreur réseau';
     console.error(e);
   }
 }
@@ -1008,8 +1018,13 @@ function tick(){
 }
 setInterval(tick,1000);
 
-// ── INIT ──
+// ── INIT ── premier refresh immédiat, puis rythme normal
 refresh();
+// Si les données sont encore vides après 2s (bot qui démarre), on refetch
+setTimeout(()=>{
+  const anyPrice = Object.values(document.querySelectorAll('.pair-price')).some(el=>el&&el.textContent&&el.textContent!=='—');
+  if(!anyPrice) refresh();
+}, 2000);
 </script>
 </body>
 </html>
