@@ -157,13 +157,13 @@ nav{
 /* ── PAIRS GRID ── */
 .pairs-grid{display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;}
 .pair-header{
-  display:grid;grid-template-columns:200px 1fr 80px 80px 100px 160px 120px;
+  display:grid;grid-template-columns:220px 110px 80px 80px 100px 160px 100px;
   padding:10px 20px;background:var(--bg2);
   font-size:11px;font-weight:500;color:var(--text3);
   text-transform:uppercase;letter-spacing:0.5px;
 }
 .pair-card{
-  display:grid;grid-template-columns:200px 1fr 80px 80px 100px 160px 120px;
+  display:grid;grid-template-columns:220px 110px 80px 80px 100px 160px 100px;
   align-items:center;padding:16px 20px;
   background:var(--bg1);border-top:1px solid var(--border);
   transition:background 0.15s;cursor:default;
@@ -171,6 +171,8 @@ nav{
 .pair-card:first-child{border-top:none;}
 .pair-card:hover{background:var(--bg2);}
 .pair-ident{display:flex;align-items:center;gap:12px;}
+/* wrappers mobiles invisibles sur desktop */
+.pair-top-row,.pair-bottom-row{display:contents;}
 .pair-coin-icon{
   width:38px;height:38px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -339,15 +341,90 @@ nav{
 .refresh-progress{width:60px;height:2px;background:var(--bg3);border-radius:1px;overflow:hidden;}
 .refresh-fill{height:100%;background:var(--green);border-radius:1px;transition:width 1s linear;}
 
+/* ── RESPONSIVE TABLET ── */
 @media(max-width:900px){
-  .pair-header,.pair-card{grid-template-columns:1fr 100px 100px;}
-  .pair-card>*:nth-child(n+4){display:none;}
   .perf-layout{grid-template-columns:1fr;}
-  .aide-grid{grid-template-columns:1fr;}
-  .hero h1{font-size:28px;}
-  .kpi-row{flex-direction:column;}
-  .kpi{border-right:none;border-bottom:1px solid var(--border);}
-  .kpi:last-child{border-bottom:none;}
+  .aide-grid{grid-template-columns:1fr 1fr;}
+  /* tableau paires : masquer sparkline + SL/TP */
+  .pair-header{grid-template-columns:1fr 90px 70px 90px;padding:8px 16px;}
+  .pair-card  {grid-template-columns:1fr 90px 70px 90px;padding:14px 16px;}
+  .pair-card>*:nth-child(5),.pair-card>*:nth-child(7){display:none;}
+  .pair-header>*:nth-child(5),.pair-header>*:nth-child(7){display:none;}
+}
+
+/* ── RESPONSIVE MOBILE ── */
+@media(max-width:600px){
+  /* Nav : brand + tabs uniquement, tout le reste caché */
+  nav{padding:0 14px;height:auto;flex-wrap:wrap;gap:0;}
+  .nav-brand{height:48px;}
+  .nav-tabs{
+    order:3;width:100%;
+    display:flex;border-top:1px solid var(--border);
+    padding:6px 8px;gap:4px;background:rgba(0,0,0,0.6);
+  }
+  .nav-tab{flex:1;text-align:center;padding:7px 6px;font-size:12px;}
+  .nav-right{gap:8px;}
+  .live-badge{font-size:10px;padding:3px 8px;}
+  .btn-lexique{display:none;}  /* masqué sur mobile : accessible via onglet Guide */
+  #nav-clock{display:none;}
+
+  /* Ticker : plus petit */
+  .ticker{padding:6px 0;}
+  .ticker-inner{gap:28px;}
+  .t-item{font-size:11px;gap:5px;}
+
+  /* Hero */
+  .hero{padding:32px 16px 28px;}
+  .hero h1{font-size:clamp(24px,7vw,36px);letter-spacing:-1px;}
+  .hero p{font-size:14px;margin-bottom:24px;}
+  .kpi-row{display:grid;grid-template-columns:1fr 1fr;max-width:100%;}
+  .kpi{padding:14px 10px;border-right:1px solid var(--border);}
+  .kpi:nth-child(2n){border-right:none;}
+  .kpi:nth-child(n+3){border-top:1px solid var(--border);}
+  .kpi-val{font-size:20px;}
+  .kpi-label{font-size:10px;}
+
+  /* Section */
+  .section{padding:0 14px 32px;}
+  .section-title{font-size:18px;}
+
+  /* Tableau paires mobile : layout carte */
+  .pair-header{display:none;}
+  .pairs-grid{border-radius:var(--r);gap:0;}
+  .pair-card{
+    display:flex;flex-direction:column;
+    padding:14px;gap:10px;
+    border-top:1px solid var(--border);
+  }
+  .pair-card:first-child{border-top:none;}
+  /* Activer les wrappers flex */
+  .pair-top-row{display:flex!important;align-items:center;justify-content:space-between;gap:8px;}
+  .pair-bottom-row{display:flex!important;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .pair-coin-icon{width:32px;height:32px;font-size:15px;}
+  .pair-coin-name{font-size:13px;}
+  .pair-price{font-size:16px;font-weight:700;}
+  .pair-chg{font-size:12px;}
+  .spark-col{display:none;}
+  .sltp-col{flex-direction:row;gap:10px;}
+  .sl-val,.tp-val{font-size:11px;}
+
+  /* Performance */
+  .perf-layout{padding:0 14px 32px;gap:14px;}
+  .stat-mini-grid{grid-template-columns:1fr 1fr;}
+  .sm-val{font-size:18px;}
+  .card-body{padding:14px 16px;}
+  .card-head{padding:14px 16px 12px;}
+  /* Table trades : scroll horizontal */
+  .trades-table{font-size:11px;}
+  .trades-table td,.trades-table th{padding:10px 8px 10px 0;}
+
+  /* Guide */
+  .aide-grid{grid-template-columns:1fr;padding:0 14px 32px;gap:12px;}
+  .aide-card{padding:18px;}
+
+  /* Refresh bar */
+  .refresh-bar{padding:7px 14px;font-size:10px;}
+  #bar-status{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 }
 </style>
 </head>
@@ -786,16 +863,22 @@ function buildPairs(signals){
       const div=document.createElement('div');
       div.className='pair-card';div.id=rid;
       div.innerHTML=`
-        <div class="pair-ident">
-          <div class="pair-coin-icon">${EMOJIS[pair]||'?'}</div>
-          <div><div class="pair-coin-name">${pair}</div><div class="pair-coin-base">${NAMES[pair]||''}</div></div>
+        <div class="pair-top-row" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div class="pair-ident">
+            <div class="pair-coin-icon">${EMOJIS[pair]||'?'}</div>
+            <div><div class="pair-coin-name">${pair}</div><div class="pair-coin-base">${NAMES[pair]||''}</div></div>
+          </div>
+          <div style="text-align:right;">
+            <div class="pair-price" id="pp-${pair.replace('/','_')}">—</div>
+            <div class="pair-chg"  id="pc-${pair.replace('/','_')}">—</div>
+          </div>
         </div>
-        <div class="pair-price" id="pp-${pair.replace('/','_')}">—</div>
-        <div class="pair-chg"  id="pc-${pair.replace('/','_')}">—</div>
-        <div class="pair-rsi"  id="pr-${pair.replace('/','_')}"><span style="color:var(--text3)">—</span></div>
-        <div id="ps-${pair.replace('/','_')}"><span class="signal-chip chip-neu">● —</span></div>
-        <div class="sltp-col"  id="pst-${pair.replace('/','_')}"><span style="color:var(--text3)">—</span></div>
-        <div class="spark-col"><canvas id="${sid}" width="100" height="42"></canvas></div>`;
+        <div class="pair-bottom-row" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div class="pair-rsi"  id="pr-${pair.replace('/','_')}"><span style="color:var(--text3)">—</span></div>
+          <div id="ps-${pair.replace('/','_')}"><span class="signal-chip chip-neu">● —</span></div>
+          <div class="sltp-col"  id="pst-${pair.replace('/','_')}"><span style="color:var(--text3)">—</span></div>
+          <div class="spark-col"><canvas id="${sid}" width="80" height="36"></canvas></div>
+        </div>`;
       cont.appendChild(div);
       initSpark(pair,sid);
     }
