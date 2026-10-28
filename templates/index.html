@@ -448,19 +448,24 @@ nav{
   </div>
 </nav>
 
-<!-- TICKER -->
+<!-- TICKER (généré dynamiquement par JS) -->
 <div class="ticker">
-  <div class="ticker-inner" id="ticker">
-    <span class="t-item"><span class="t-pair">BTC/USDT</span><span class="t-price" id="tk-BTC">—</span><span class="t-chg" id="tc-BTC"></span></span>
-    <span class="t-item"><span class="t-pair">ETH/USDT</span><span class="t-price" id="tk-ETH">—</span><span class="t-chg" id="tc-ETH"></span></span>
-    <span class="t-item"><span class="t-pair">SOL/USDT</span><span class="t-price" id="tk-SOL">—</span><span class="t-chg" id="tc-SOL"></span></span>
-    <span class="t-item"><span class="t-pair">BNB/USDT</span><span class="t-price" id="tk-BNB">—</span><span class="t-chg" id="tc-BNB"></span></span>
-    <span class="t-item"><span class="t-pair">ADA/USDT</span><span class="t-price" id="tk-ADA">—</span><span class="t-chg" id="tc-ADA"></span></span>
-    <span class="t-item"><span class="t-pair">BTC/USDT</span><span class="t-price">—</span></span>
-    <span class="t-item"><span class="t-pair">ETH/USDT</span><span class="t-price">—</span></span>
-    <span class="t-item"><span class="t-pair">SOL/USDT</span><span class="t-price">—</span></span>
-    <span class="t-item"><span class="t-pair">BNB/USDT</span><span class="t-price">—</span></span>
-    <span class="t-item"><span class="t-pair">ADA/USDT</span><span class="t-price">—</span></span>
+  <div class="ticker-inner" id="ticker-inner">
+    <span class="t-item"><span class="t-pair">BTC/USDT</span> <span class="t-price" id="tk-BTC">—</span> <span class="t-chg" id="tc-BTC"></span></span>
+    <span class="t-item"><span class="t-pair">ETH/USDT</span> <span class="t-price" id="tk-ETH">—</span> <span class="t-chg" id="tc-ETH"></span></span>
+    <span class="t-item"><span class="t-pair">SOL/USDT</span> <span class="t-price" id="tk-SOL">—</span> <span class="t-chg" id="tc-SOL"></span></span>
+    <span class="t-item"><span class="t-pair">BNB/USDT</span> <span class="t-price" id="tk-BNB">—</span> <span class="t-chg" id="tc-BNB"></span></span>
+    <span class="t-item"><span class="t-pair">ADA/USDT</span> <span class="t-price" id="tk-ADA">—</span> <span class="t-chg" id="tc-ADA"></span></span>
+    <span class="t-item"><span class="t-pair">XRP/USDT</span> <span class="t-price" id="tk-XRP">—</span> <span class="t-chg" id="tc-XRP"></span></span>
+    <span class="t-item"><span class="t-pair">DOGE/USDT</span><span class="t-price" id="tk-DOGE">—</span><span class="t-chg" id="tc-DOGE"></span></span>
+    <span class="t-item"><span class="t-pair">AVAX/USDT</span><span class="t-price" id="tk-AVAX">—</span><span class="t-chg" id="tc-AVAX"></span></span>
+    <span class="t-item"><span class="t-pair">DOT/USDT</span> <span class="t-price" id="tk-DOT">—</span> <span class="t-chg" id="tc-DOT"></span></span>
+    <span class="t-item"><span class="t-pair">LINK/USDT</span><span class="t-price" id="tk-LINK">—</span><span class="t-chg" id="tc-LINK"></span></span>
+    <span class="t-item"><span class="t-pair">MATIC/USDT</span><span class="t-price" id="tk-MATIC">—</span><span class="t-chg" id="tc-MATIC"></span></span>
+    <span class="t-item"><span class="t-pair">LTC/USDT</span> <span class="t-price" id="tk-LTC">—</span> <span class="t-chg" id="tc-LTC"></span></span>
+    <span class="t-item"><span class="t-pair">UNI/USDT</span> <span class="t-price" id="tk-UNI">—</span> <span class="t-chg" id="tc-UNI"></span></span>
+    <span class="t-item"><span class="t-pair">ATOM/USDT</span><span class="t-price" id="tk-ATOM">—</span><span class="t-chg" id="tc-ATOM"></span></span>
+    <span class="t-item"><span class="t-pair">NEAR/USDT</span><span class="t-price" id="tk-NEAR">—</span><span class="t-chg" id="tc-NEAR"></span></span>
   </div>
 </div>
 
@@ -773,9 +778,21 @@ nav{
 </div>
 
 <script>
-const EMOJIS = {"BTC/USDT":"₿","ETH/USDT":"Ξ","SOL/USDT":"◎","BNB/USDT":"🔶","ADA/USDT":"₳"};
-const NAMES  = {"BTC/USDT":"Bitcoin","ETH/USDT":"Ethereum","SOL/USDT":"Solana","BNB/USDT":"BNB","ADA/USDT":"Cardano"};
-const COLORS = {"BTC/USDT":"#f7931a","ETH/USDT":"#627eea","SOL/USDT":"#9945ff","BNB/USDT":"#f3ba2f","ADA/USDT":"#3cc8c8"};
+const EMOJIS = {
+  "BTC/USDT":"₿","ETH/USDT":"Ξ","SOL/USDT":"◎","BNB/USDT":"🔶","ADA/USDT":"₳",
+  "XRP/USDT":"💧","DOGE/USDT":"🐶","AVAX/USDT":"🔺","DOT/USDT":"●","LINK/USDT":"⬡",
+  "MATIC/USDT":"🟣","LTC/USDT":"Ł","UNI/USDT":"🦄","ATOM/USDT":"⚛","NEAR/USDT":"🌐"
+};
+const NAMES  = {
+  "BTC/USDT":"Bitcoin","ETH/USDT":"Ethereum","SOL/USDT":"Solana","BNB/USDT":"BNB","ADA/USDT":"Cardano",
+  "XRP/USDT":"XRP","DOGE/USDT":"Dogecoin","AVAX/USDT":"Avalanche","DOT/USDT":"Polkadot","LINK/USDT":"Chainlink",
+  "MATIC/USDT":"Polygon","LTC/USDT":"Litecoin","UNI/USDT":"Uniswap","ATOM/USDT":"Cosmos","NEAR/USDT":"NEAR"
+};
+const COLORS = {
+  "BTC/USDT":"#f7931a","ETH/USDT":"#627eea","SOL/USDT":"#9945ff","BNB/USDT":"#f3ba2f","ADA/USDT":"#3cc8c8",
+  "XRP/USDT":"#00aae4","DOGE/USDT":"#c2a633","AVAX/USDT":"#e84142","DOT/USDT":"#e6007a","LINK/USDT":"#2a5ada",
+  "MATIC/USDT":"#8247e5","LTC/USDT":"#bfbbbb","UNI/USDT":"#ff007a","ATOM/USDT":"#6f4e7c","NEAR/USDT":"#00c08b"
+};
 
 const sparkData={}, sparkCharts={}, prevPrices={};
 let pnlChart=null;

@@ -18,11 +18,21 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 PERSIST_FILE = os.environ.get("PERSIST_FILE", "/tmp/ricch_trades.json")
 
 PAIRS = {
-    "BTC/USDT": {"symbol": "BTCUSDT", "coingecko": "bitcoin",     "emoji": "₿",  "ref_price": 67000, "vol": 0.028},
-    "ETH/USDT": {"symbol": "ETHUSDT", "coingecko": "ethereum",    "emoji": "Ξ",  "ref_price":  3500, "vol": 0.033},
-    "SOL/USDT": {"symbol": "SOLUSDT", "coingecko": "solana",      "emoji": "◎",  "ref_price":   175, "vol": 0.042},
-    "BNB/USDT": {"symbol": "BNBUSDT", "coingecko": "binancecoin", "emoji": "🔶", "ref_price":   580, "vol": 0.026},
-    "ADA/USDT": {"symbol": "ADAUSDT", "coingecko": "cardano",     "emoji": "₳",  "ref_price":  0.45, "vol": 0.040},
+    "BTC/USDT":  {"symbol": "BTCUSDT",  "coingecko": "bitcoin",          "emoji": "₿",  "ref_price": 67000, "vol": 0.028},
+    "ETH/USDT":  {"symbol": "ETHUSDT",  "coingecko": "ethereum",         "emoji": "Ξ",  "ref_price":  3500, "vol": 0.033},
+    "SOL/USDT":  {"symbol": "SOLUSDT",  "coingecko": "solana",           "emoji": "◎",  "ref_price":   175, "vol": 0.042},
+    "BNB/USDT":  {"symbol": "BNBUSDT",  "coingecko": "binancecoin",      "emoji": "🔶", "ref_price":   580, "vol": 0.026},
+    "ADA/USDT":  {"symbol": "ADAUSDT",  "coingecko": "cardano",          "emoji": "₳",  "ref_price":  0.45, "vol": 0.040},
+    "XRP/USDT":  {"symbol": "XRPUSDT",  "coingecko": "ripple",           "emoji": "💧", "ref_price":  0.55, "vol": 0.038},
+    "DOGE/USDT": {"symbol": "DOGEUSDT", "coingecko": "dogecoin",         "emoji": "🐶", "ref_price":  0.12, "vol": 0.052},
+    "AVAX/USDT": {"symbol": "AVAXUSDT", "coingecko": "avalanche-2",      "emoji": "🔺", "ref_price":    38, "vol": 0.048},
+    "DOT/USDT":  {"symbol": "DOTUSDT",  "coingecko": "polkadot",         "emoji": "●",  "ref_price":     8, "vol": 0.045},
+    "LINK/USDT": {"symbol": "LINKUSDT", "coingecko": "chainlink",        "emoji": "⬡",  "ref_price":    15, "vol": 0.044},
+    "MATIC/USDT":{"symbol": "MATICUSDT","coingecko": "matic-network",    "emoji": "🟣", "ref_price":  0.80, "vol": 0.050},
+    "LTC/USDT":  {"symbol": "LTCUSDT",  "coingecko": "litecoin",         "emoji": "Ł",  "ref_price":    85, "vol": 0.035},
+    "UNI/USDT":  {"symbol": "UNIUSDT",  "coingecko": "uniswap",          "emoji": "🦄", "ref_price":     9, "vol": 0.046},
+    "ATOM/USDT": {"symbol": "ATOMUSDT", "coingecko": "cosmos",           "emoji": "⚛",  "ref_price":    10, "vol": 0.047},
+    "NEAR/USDT": {"symbol": "NEARUSDT", "coingecko": "near",             "emoji": "🌐", "ref_price":     5, "vol": 0.051},
 }
 
 # État global des signaux (partagé avec Flask)
