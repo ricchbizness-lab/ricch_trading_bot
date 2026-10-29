@@ -197,9 +197,10 @@ nav{
   display:inline-flex;align-items:center;gap:5px;
   padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;
 }
-.chip-buy {background:var(--green-bg);color:var(--green);border:1px solid rgba(48,209,88,0.2);}
-.chip-sell{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,58,0.2);}
-.chip-neu {background:rgba(255,255,255,0.05);color:var(--text3);border:1px solid var(--border);}
+.chip-buy  {background:var(--green-bg);color:var(--green);border:1px solid rgba(48,209,88,0.2);}
+.chip-sell {background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,58,0.2);}
+.chip-allege{background:rgba(255,159,10,0.12);color:#ff9f0a;border:1px solid rgba(255,159,10,0.25);}
+.chip-neu  {background:rgba(255,255,255,0.05);color:var(--text3);border:1px solid var(--border);}
 .sltp-col{display:flex;flex-direction:column;gap:3px;}
 .sl-val{font-size:11px;color:var(--red);font-variant-numeric:tabular-nums;}
 .tp-val{font-size:11px;color:var(--green);font-variant-numeric:tabular-nums;}
@@ -475,19 +476,19 @@ nav{
   <div class="hero">
     <div class="hero-eyebrow"><div class="live-dot"></div>Données en temps réel · EMA Pullback Strategy</div>
     <h1>Vos signaux de trading,<br>en un coup d'œil.</h1>
-    <p>Le bot analyse 5 cryptomonnaies en continu et détecte les opportunités d'achat selon la stratégie EMA Pullback. Aucun trade réel — mode simulation.</p>
+    <p>Le bot analyse 15 cryptomonnaies en continu, détecte les opportunités d'achat (EMA Pullback) et les zones de prise de profit (RSI surachat). Mode simulation.</p>
     <div class="kpi-row">
       <div class="kpi">
         <div class="kpi-val green" id="kpi-buy">—</div>
-        <div class="kpi-label">Signaux Achat</div>
+        <div class="kpi-label">▲ Achat</div>
       </div>
       <div class="kpi">
-        <div class="kpi-val red" id="kpi-sell">—</div>
-        <div class="kpi-label">Signaux Vente</div>
+        <div class="kpi-val" style="color:#ff9f0a" id="kpi-allege">—</div>
+        <div class="kpi-label">◆ Alléger</div>
       </div>
       <div class="kpi" style="color:var(--text2)">
         <div class="kpi-val" id="kpi-neu">—</div>
-        <div class="kpi-label">En attente</div>
+        <div class="kpi-label">● Neutre</div>
       </div>
       <div class="kpi">
         <div class="kpi-val" style="color:var(--cyan)" id="kpi-src">—</div>
@@ -523,11 +524,22 @@ nav{
   <div class="section" id="buy-section" style="display:none;">
     <div class="section-head">
       <div>
-        <div class="section-title">🟢 Opportunités détectées</div>
-        <div class="section-sub">Signaux d'achat actifs — à confirmer manuellement sur votre exchange</div>
+        <div class="section-title">🟢 Opportunités d'achat</div>
+        <div class="section-sub">Conditions EMA Pullback remplies — à confirmer manuellement sur votre exchange</div>
       </div>
     </div>
     <div id="buy-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
+  </div>
+
+  <!-- Alléger signals highlight -->
+  <div class="section" id="allege-section" style="display:none;">
+    <div class="section-head">
+      <div>
+        <div class="section-title">🟠 Zones de prise de profit</div>
+        <div class="section-sub">RSI en surachat — si vous détenez ces cryptos, envisagez d'alléger votre position</div>
+      </div>
+    </div>
+    <div id="allege-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
   </div>
 
 </div><!-- /page-dashboard -->
@@ -572,15 +584,15 @@ nav{
           <div id="trades-empty" class="empty-state">
             <div class="empty-icon">🤖</div>
             <div class="empty-title">Le bot n'a pas encore généré de signal</div>
-            <div class="empty-sub">Les signaux ACHAT apparaîtront ici avec leurs niveaux SL/TP et leur résultat une fois clôturés.</div>
+            <div class="empty-sub">Les signaux ACHAT (avec SL/TP) et ALLÉGER (zones de prise de profit) apparaîtront ici dès leur génération.</div>
           </div>
           <table class="trades-table" id="trades-table" style="display:none;">
             <thead><tr>
-              <th>#</th><th>Paire</th><th>Entrée</th>
-              <th data-tip="Prix Stop Loss : vente automatique si le marché baisse jusqu'ici pour limiter la perte.">SL ⓘ</th>
-              <th data-tip="Prix Take Profit : objectif de gain. La position est clôturée ici si le marché monte.">TP ⓘ</th>
+              <th>#</th><th>Paire</th><th>Type</th><th>Prix</th>
+              <th data-tip="Prix Stop Loss (signaux ACHAT uniquement)">SL ⓘ</th>
+              <th data-tip="Prix Take Profit (signaux ACHAT uniquement)">TP ⓘ</th>
               <th>Date</th>
-              <th data-tip="TP ✅ = objectif atteint (trade gagnant) · SL ❌ = stop touché (trade perdant) · Ouvert 🔵 = trade en cours">Statut ⓘ</th>
+              <th data-tip="TP ✅ = objectif atteint · SL ❌ = stop touché · Alerte 🟠 = signal vente · Ouvert 🔵 = en cours">Statut ⓘ</th>
               <th data-tip="Gain ou perte en % par rapport au prix d'entrée">P&L ⓘ</th>
             </tr></thead>
             <tbody id="trades-tbody"></tbody>
@@ -827,8 +839,9 @@ function rsiColor(r){
 }
 function sigChip(sig){
   if(!sig)return'<span class="signal-chip chip-neu">● NEUTRE</span>';
-  if(sig.includes('ACHETER'))return'<span class="signal-chip chip-buy">▲ ACHAT</span>';
-  if(sig.includes('VENDRE')) return'<span class="signal-chip chip-sell">▼ VENTE</span>';
+  if(sig.includes('ACHETER')) return'<span class="signal-chip chip-buy">▲ ACHAT</span>';
+  if(sig.includes('ALLÉGER')) return'<span class="signal-chip chip-allege">◆ ALLÉGER</span>';
+  if(sig.includes('BAISSIER'))return'<span class="signal-chip chip-sell">▼ BAISSIER</span>';
   return'<span class="signal-chip chip-neu">● NEUTRE</span>';
 }
 
@@ -938,8 +951,8 @@ function buildPairs(signals){
   });
 
   // KPIs
-  let buy=0,sell=0,neu=0,srcs=new Set();
-  const buyList=[];
+  let buy=0,allege=0,neu=0,srcs=new Set();
+  const buyList=[], allegeList=[];
   let totalPrices=0, loadedPrices=0;
   Object.entries(signals).forEach(([p,s])=>{
     if(!s)return;
@@ -947,11 +960,11 @@ function buildPairs(signals){
     if(s.price&&s.price>0) loadedPrices++;
     if(s.source&&s.source!=='—')srcs.add(s.source);
     if(s.signal?.includes('ACHETER')){buy++;buyList.push([p,s]);}
-    else if(s.signal?.includes('VENDRE'))sell++;
+    else if(s.signal?.includes('ALLÉGER')){allege++;allegeList.push([p,s]);}
     else neu++;
   });
   document.getElementById('kpi-buy').textContent=buy;
-  document.getElementById('kpi-sell').textContent=sell;
+  document.getElementById('kpi-allege').textContent=allege;
   document.getElementById('kpi-neu').textContent=neu;
   document.getElementById('kpi-src').textContent=[...srcs].join('·')||'—';
   const allLoaded = loadedPrices === totalPrices && totalPrices > 0;
@@ -995,6 +1008,36 @@ function buildPairs(signals){
   } else {
     sec.style.display='none';
   }
+
+  // Alléger cards
+  const asec=document.getElementById('allege-section');
+  const acards=document.getElementById('allege-cards');
+  if(allegeList.length>0){
+    asec.style.display='';
+    acards.innerHTML=allegeList.map(([p,s])=>`
+      <div class="glass-card" style="padding:22px;border-color:rgba(255,159,10,0.2);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+          <div>
+            <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px;">${EMOJIS[p]} ${p}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px;">${NAMES[p]||''} · RSI ${s.rsi} ⚠️ Surachat</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:20px;font-weight:700;">${fmt(s.price)}</div>
+            <div style="font-size:12px;color:${(s.change_24h||0)>=0?'var(--green)':'var(--red)'}">${(s.change_24h||0)>=0?'+':''}${(s.change_24h||0).toFixed(2)}%</div>
+          </div>
+        </div>
+        <div style="background:rgba(255,159,10,0.08);border:1px solid rgba(255,159,10,0.2);border-radius:10px;padding:14px;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#ff9f0a;margin-bottom:6px;">💰 Prix de vente conseillé</div>
+          <div style="font-size:18px;font-weight:700;color:#ff9f0a;">${fmt(s.sell_target||s.price)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">RSI > 70 — zone de surachat, prise de profit recommandée</div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--text3);line-height:1.6;">
+          📌 Si vous détenez <strong style="color:var(--text)">${p}</strong>, c'est une zone où le marché peut corriger. Vous pouvez vendre au prix du marché sur Binance ou placer un ordre limite à ce prix.
+        </div>
+      </div>`).join('');
+  } else {
+    asec.style.display='none';
+  }
 }
 
 // ── PERFORMANCE ──
@@ -1026,19 +1069,29 @@ async function loadPerformance(){
 
     if(d.trades&&d.trades.length>0){
       tableEl.style.display='table';emptyEl.style.display='none';
-      subEl.textContent=`${d.trades.length} signal(s) · ${st.wins} gagnant(s) · ${st.losses} perdant(s)`;
+      const nVente=d.trades.filter(t=>t.action==='VENTE').length;
+      const nAchat=d.trades.length-nVente;
+      subEl.textContent=`${d.trades.length} signal(s) · ${nAchat} achat(s) · ${nVente} alerte(s) vente · ${st.wins} TP · ${st.losses} SL`;
       const rows=[...d.trades].reverse().slice(0,30);
       tbody.innerHTML=rows.map(t=>{
+        const isVente=t.action==='VENTE';
         const pnlTxt=t.pnl_pct!=null
           ?`<span class="${t.pnl_pct>=0?'pnl-pos':'pnl-neg'}">${t.pnl_pct>=0?'+':''}${t.pnl_pct}%</span>`
+          :isVente?`<span style="color:#ff9f0a;font-size:12px">informatif</span>`
           :`<span class="pnl-open">En cours</span>`;
-        const statCls=t.status?.includes('TP')?'status-tp':t.status?.includes('SL')?'status-sl':'status-open';
+        const statCls=t.status?.includes('TP')?'status-tp':t.status?.includes('SL')?'status-sl':t.status?.includes('🟠')?'':'status-open';
+        const typeBadge=isVente
+          ?`<span style="background:rgba(255,159,10,0.12);color:#ff9f0a;border:1px solid rgba(255,159,10,0.25);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;">◆ VENTE</span>`
+          :`<span style="background:rgba(48,209,88,0.1);color:#30d158;border:1px solid rgba(48,209,88,0.2);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;">▲ ACHAT</span>`;
+        const sellTargetInfo=isVente&&t.sell_target
+          ?`<span style="font-size:11px;color:#ff9f0a">🎯 ${fmt(t.sell_target)}</span>`:`—`;
         return`<tr>
           <td style="color:var(--text3)">#${t.id||'—'}</td>
           <td style="font-weight:600">${EMOJIS[t.pair]||''} ${t.pair}</td>
+          <td>${typeBadge}</td>
           <td>${fmt(t.entry||t.price)}</td>
-          <td style="color:var(--red)">${fmt(t.sl)}</td>
-          <td style="color:var(--green)">${fmt(t.tp)}</td>
+          <td style="color:var(--red)">${isVente?sellTargetInfo:fmt(t.sl)}</td>
+          <td style="color:var(--green)">${isVente?'—':fmt(t.tp)}</td>
           <td style="color:var(--text3);font-size:12px">${fmtDT(t.time)}</td>
           <td class="${statCls}">${t.status||'—'}</td>
           <td>${pnlTxt}</td>

@@ -38,7 +38,7 @@ PAIRS = {
 # État global des signaux (partagé avec Flask)
 signals_state = {pair: {
     "signal": "NEUTRE", "price": 0, "sl": 0, "tp": 0,
-    "change_24h": 0, "last_update": None, "rsi": 0,
+    "sell_target": 0, "change_24h": 0, "last_update": None, "rsi": 0,
     "source": "—",
 } for pair in PAIRS}
 
@@ -192,6 +192,7 @@ def compute_signal(df: pd.DataFrame) -> dict:
         "sl": 0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
     }
 
+    # Signal ACHAT : tendance haussière + pullback sur EMA20 + RSI momentum
     if uptrend and pullback and rsi_ok:
         return {**base,
             "signal":  "ACHETER 🟢",
@@ -200,8 +201,17 @@ def compute_signal(df: pd.DataFrame) -> dict:
             "sl_pct":  round((price - sl) / price * 100, 2),
             "tp_pct":  round((tp - price) / price * 100, 2),
         }
+    # Signal ALLÉGER : surachat RSI > 70 ET prix au-dessus EMA20 de 2%+ → zone de prise de profit
+    elif rsi_val > 70 and price > e20 * 1.02:
+        # Prix de vente conseillé = prix actuel (vendre au marché ou ordre limite proche)
+        sell_target = round(price, 4)
+        return {**base,
+            "signal":      "ALLÉGER 🟠",
+            "sell_target": sell_target,
+        }
+    # Signal BAISSIER : tendance renversée
     elif not uptrend or price < e50 * 0.99:
-        return {**base, "signal": "VENDRE 🔴"}
+        return {**base, "signal": "BAISSIER 🔴"}
     else:
         return {**base, "signal": "NEUTRE ⚪"}
 
@@ -224,12 +234,25 @@ def send_telegram(message: str):
 
 def format_signal_message(pair: str, price: float, sig: dict) -> str:
     emoji = PAIRS[pair]["emoji"]
+    signal = sig.get("signal", "")
+
+    if "ALLÉGER" in signal:
+        return (
+            f"{emoji} <b>{pair}</b>\n━━━━━━━━━━━━━━\n"
+            f"Signal : <b>{signal}</b>\n"
+            f"Prix actuel : <b>{price:,.4f} $</b>\n"
+            f"💰 Prix de vente conseillé : <b>{sig.get('sell_target', price):,.4f} $</b>\n"
+            f"RSI : {sig.get('rsi', 'N/A')} ⚠️ Zone de surachat\n"
+            f"📌 Si vous détenez cette crypto, c'est une zone de prise de profit.\n"
+            f"📅 {datetime.now(timezone.utc).strftime('%d/%m %H:%M')} UTC"
+        )
+
     sl_tp = (f"🛑 Stop Loss  : {sig['sl']:,.4f} $ (-{sig['sl_pct']}%)\n"
              f"🎯 Take Profit: {sig['tp']:,.4f} $ (+{sig['tp_pct']}%)\n"
              if sig.get("sl") else "")
     return (
         f"{emoji} <b>{pair}</b>\n━━━━━━━━━━━━━━\n"
-        f"Signal : <b>{sig['signal']}</b>\n"
+        f"Signal : <b>{signal}</b>\n"
         f"Prix   : <b>{price:,.4f} $</b>\n"
         f"RSI    : {sig.get('rsi', 'N/A')}\n"
         f"{sl_tp}"
@@ -256,6 +279,7 @@ def run_signals_loop():
                     "price":       round(price, 4),
                     "sl":          sig.get("sl", 0),
                     "tp":          sig.get("tp", 0),
+                    "sell_target": sig.get("sell_target", 0),
                     "sl_pct":      sig.get("sl_pct", 0),
                     "tp_pct":      sig.get("tp_pct", 0),
                     "rsi":         sig.get("rsi", 0),
@@ -310,6 +334,30 @@ def run_signals_loop():
                     }
                     trade_history.append(trade)
                     _open_trades[pair] = trade
+                    _save_persist()
+
+                # ── Nouveau signal alléger ──
+                elif "ALLÉGER" in current_sig and previous_signals[pair] != current_sig:
+                    msg = format_signal_message(pair, price, sig)
+                    send_telegram(msg)
+                    trade = {
+                        "id":          len(trade_history) + 1,
+                        "pair":        pair,
+                        "action":      "VENTE",
+                        "entry":       round(price, 4),
+                        "sell_target": sig.get("sell_target", round(price, 4)),
+                        "sl":          0,
+                        "tp":          0,
+                        "sl_pct":      0,
+                        "tp_pct":      0,
+                        "rsi":         sig.get("rsi", 0),
+                        "time":        datetime.now(timezone.utc).isoformat(),
+                        "status":      "Alerte 🟠",
+                        "exit_price":  None,
+                        "exit_time":   None,
+                        "pnl_pct":     None,
+                    }
+                    trade_history.append(trade)
                     _save_persist()
 
                 previous_signals[pair] = current_sig
