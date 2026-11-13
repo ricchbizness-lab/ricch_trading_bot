@@ -92,7 +92,7 @@ def get_klines(pair_info: dict, limit=100):
 def _binance_klines(symbol: str, limit=100) -> pd.DataFrame | None:
     for base_url in ["https://api.binance.com/api/v3/klines", "https://api.binance.us/api/v3/klines"]:
         try:
-            r = requests.get(base_url, params={"symbol": symbol, "interval": "1d", "limit": limit}, timeout=8)
+            r = requests.get(base_url, params={"symbol": symbol, "interval": "1h", "limit": limit}, timeout=8)
             r.raise_for_status()
             data = r.json()
             if not data:
@@ -174,8 +174,8 @@ def compute_signal(df: pd.DataFrame) -> dict:
     low_cur    = low[-1]
 
     uptrend  = e20 > e50 and e20 > e20_3 and e50 > e50_3
-    pullback = low_cur <= e20 * 1.005 and price > e20 * 0.97
-    rsi_ok   = rsi_val > 42
+    pullback = low_cur <= e20 * 1.01 and price > e20 * 0.96
+    rsi_ok   = rsi_val > 38
 
     sl   = min(e20 - 2.5 * atr_val, price * 0.96)
     tp   = price + 4.0 * atr_val
@@ -367,5 +367,5 @@ def run_signals_loop():
 
             time.sleep(2)
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 5 min")
-        time.sleep(300)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle terminé — prochain dans 30 min")
+        time.sleep(1800)
