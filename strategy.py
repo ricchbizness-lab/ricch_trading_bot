@@ -223,15 +223,41 @@ def _synthetic_ohlc(ref_price: float, daily_vol: float, n: int = 100) -> pd.Data
 
 # ── Stratégie ───────────────────────────────────────────────────────────────
 
+# Capital de référence pour le sizing (modifiable via env var)
+CAPITAL = float(os.environ.get("CAPITAL", "100"))  # € de capital total supposé
+RISK_PCT = 0.02  # 2% du capital risqué par trade
+
+def _position_size(price: float, sl: float) -> dict:
+    """
+    Calcule la taille de position optimale selon le risque fixé.
+    Formule : mise = (capital × risk_pct) / (prix - sl)
+    Retourne le montant € à investir et la quantité de coins.
+    """
+    risk_per_unit = price - sl
+    if risk_per_unit <= 0:
+        return {"amount_eur": 0, "qty": 0, "risk_eur": 0}
+    risk_eur   = round(CAPITAL * RISK_PCT, 2)
+    qty        = risk_eur / risk_per_unit
+    amount_eur = round(qty * price, 2)
+    return {
+        "amount_eur": amount_eur,
+        "qty":        round(qty, 6),
+        "risk_eur":   risk_eur,
+    }
+
 def compute_signal(df: pd.DataFrame) -> dict:
     if df is None or len(df) < 55:
         return {"signal": "DONNÉES MANQUANTES", "sl": 0, "tp": 0}
 
-    close = df["close"].values
-    high  = df["high"].values
-    low   = df["low"].values
+    close  = df["close"].values
+    high   = df["high"].values
+    low    = df["low"].values
+    volume = df["volume"].values if "volume" in df.columns else np.ones(len(close))
 
+    # ── Indicateurs communs ──
+    ema12 = pd.Series(close).ewm(span=12, adjust=False).mean().values
     ema20 = pd.Series(close).ewm(span=20, adjust=False).mean().values
+    ema26 = pd.Series(close).ewm(span=26, adjust=False).mean().values
     ema50 = pd.Series(close).ewm(span=50, adjust=False).mean().values
 
     h, l, c = pd.Series(high), pd.Series(low), pd.Series(close)
@@ -243,54 +269,91 @@ def compute_signal(df: pd.DataFrame) -> dict:
     lo = (-s.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
     rsi = (100 - 100 / (1 + g / lo.replace(0, 1e-10))).values
 
-    price   = close[-1]
+    price      = close[-1]
+    e12, e12_1 = ema12[-1], ema12[-2]
     e20, e20_3 = ema20[-1], ema20[-3]
+    e26, e26_1 = ema26[-1], ema26[-2]
     e50, e50_3 = ema50[-1], ema50[-3]
     atr_val    = atr[-1]
     rsi_val    = rsi[-1]
     low_cur    = low[-1]
 
+    change_24h = (close[-1] / close[-2] - 1) * 100 if len(close) > 1 else 0
+
+    base = {
+        "rsi":        round(rsi_val, 1),
+        "ema20":      round(e20, 4),
+        "change_24h": round(change_24h, 2),
+        "sl": 0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
+        "strategy":   "",
+    }
+
+    # ── Stratégie 1 : EMA Pullback ──────────────────────────────────────────
+    # Tendance haussière (EMA20 > EMA50, les deux montent)
+    # + prix revient toucher EMA20 (pullback)
+    # + RSI > 38 (momentum positif, pas survendu extrême)
     uptrend  = e20 > e50 and e20 > e20_3 and e50 > e50_3
     pullback = low_cur <= e20 * 1.01 and price > e20 * 0.96
     rsi_ok   = rsi_val > 38
 
-    sl   = min(e20 - 2.5 * atr_val, price * 0.96)
-    tp   = price + 4.0 * atr_val
-    risk = price - sl
-    if (tp - price) / max(risk, 1e-10) < 1.3:
-        tp = price + 1.5 * risk
-
-    change_24h = (close[-1] / close[-2] - 1) * 100 if len(close) > 1 else 0
-
-    base = {
-        "rsi": round(rsi_val, 1),
-        "ema20": round(e20, 4),
-        "change_24h": round(change_24h, 2),
-        "sl": 0, "tp": 0, "sl_pct": 0, "tp_pct": 0,
-    }
-
-    # Signal ACHAT : tendance haussière + pullback sur EMA20 + RSI momentum
     if uptrend and pullback and rsi_ok:
+        sl   = min(e20 - 2.5 * atr_val, price * 0.96)
+        tp   = price + 4.0 * atr_val
+        risk = price - sl
+        if (tp - price) / max(risk, 1e-10) < 1.3:
+            tp = price + 1.5 * risk
+        sizing = _position_size(price, sl)
         return {**base,
-            "signal":  "ACHETER 🟢",
-            "sl":      round(sl, 4),
-            "tp":      round(tp, 4),
-            "sl_pct":  round((price - sl) / price * 100, 2),
-            "tp_pct":  round((tp - price) / price * 100, 2),
+            "signal":     "ACHETER 🟢",
+            "strategy":   "EMA Pullback",
+            "sl":         round(sl, 4),
+            "tp":         round(tp, 4),
+            "sl_pct":     round((price - sl) / price * 100, 2),
+            "tp_pct":     round((tp - price) / price * 100, 2),
+            "amount_eur": sizing["amount_eur"],
+            "qty":        sizing["qty"],
+            "risk_eur":   sizing["risk_eur"],
         }
-    # Signal ALLÉGER : surachat RSI > 70 ET prix au-dessus EMA20 de 2%+ → zone de prise de profit
-    elif rsi_val > 70 and price > e20 * 1.02:
-        # Prix de vente conseillé = prix actuel (vendre au marché ou ordre limite proche)
-        sell_target = round(price, 4)
+
+    # ── Stratégie 2 : EMA Crossover ─────────────────────────────────────────
+    # EMA12 vient de croiser au-dessus EMA26 (momentum haussier court terme)
+    # + prix au-dessus EMA50 (tendance de fond positive)
+    # + RSI entre 45-65 (ni suracheté ni survendu — momentum sain)
+    crossover    = e12 > e26 and e12_1 <= e26_1   # croisement haussier ce cycle
+    above_trend  = price > e50
+    rsi_momentum = 45 <= rsi_val <= 65
+
+    if crossover and above_trend and rsi_momentum:
+        sl   = min(e26 - 1.5 * atr_val, price * 0.97)
+        tp   = price + 3.0 * atr_val
+        risk = price - sl
+        if (tp - price) / max(risk, 1e-10) < 1.5:
+            tp = price + 2.0 * risk
+        sizing = _position_size(price, sl)
+        return {**base,
+            "signal":     "ACHETER 🟢",
+            "strategy":   "EMA Crossover",
+            "sl":         round(sl, 4),
+            "tp":         round(tp, 4),
+            "sl_pct":     round((price - sl) / price * 100, 2),
+            "tp_pct":     round((tp - price) / price * 100, 2),
+            "amount_eur": sizing["amount_eur"],
+            "qty":        sizing["qty"],
+            "risk_eur":   sizing["risk_eur"],
+        }
+
+    # ── Signal ALLÉGER : surachat RSI > 70 + prix > EMA20 × 1.02 ───────────
+    if rsi_val > 70 and price > e20 * 1.02:
         return {**base,
             "signal":      "ALLÉGER 🟠",
-            "sell_target": sell_target,
+            "sell_target": round(price, 4),
         }
-    # Signal BAISSIER : tendance renversée
-    elif not uptrend or price < e50 * 0.99:
+
+    # ── Signal BAISSIER : tendance renversée ────────────────────────────────
+    if not uptrend or price < e50 * 0.99:
         return {**base, "signal": "BAISSIER 🔴"}
-    else:
-        return {**base, "signal": "NEUTRE ⚪"}
+
+    return {**base, "signal": "NEUTRE ⚪"}
 
 
 # ── Telegram ────────────────────────────────────────────────────────────────
@@ -324,15 +387,32 @@ def format_signal_message(pair: str, price: float, sig: dict) -> str:
             f"📅 {datetime.now(timezone.utc).strftime('%d/%m %H:%M')} UTC"
         )
 
-    sl_tp = (f"🛑 Stop Loss  : {sig['sl']:,.4f} $ (-{sig['sl_pct']}%)\n"
-             f"🎯 Take Profit: {sig['tp']:,.4f} $ (+{sig['tp_pct']}%)\n"
-             if sig.get("sl") else "")
+    # Bloc SL/TP
+    sl_tp = ""
+    if sig.get("sl"):
+        sl_tp = (
+            f"🛑 Stop Loss  : {sig['sl']:,.4f} $ (-{sig['sl_pct']}%)\n"
+            f"🎯 Take Profit: {sig['tp']:,.4f} $ (+{sig['tp_pct']}%)\n"
+        )
+
+    # Bloc position sizing (uniquement pour les signaux ACHETER)
+    sizing_line = ""
+    if "ACHETER" in signal and sig.get("amount_eur") and sig["amount_eur"] > 0:
+        strategy = sig.get("strategy", "")
+        strat_tag = f" [{strategy}]" if strategy else ""
+        sizing_line = (
+            f"💼 Position conseillée{strat_tag} :\n"
+            f"   Mise : <b>{sig['amount_eur']} €</b> sur {CAPITAL} € de capital\n"
+            f"   Risque max : {sig['risk_eur']} € (2% du capital)\n"
+        )
+
     return (
         f"{emoji} <b>{pair}</b>\n━━━━━━━━━━━━━━\n"
         f"Signal : <b>{signal}</b>\n"
         f"Prix   : <b>{price:,.4f} $</b>\n"
         f"RSI    : {sig.get('rsi', 'N/A')}\n"
         f"{sl_tp}"
+        f"{sizing_line}"
         f"📅 {datetime.now(timezone.utc).strftime('%d/%m %H:%M')} UTC"
     )
 
