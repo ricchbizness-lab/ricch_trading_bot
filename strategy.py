@@ -9,13 +9,18 @@ import os
 import json
 import time
 from datetime import datetime, timezone, timedelta
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
 
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # Fichier de persistance (survit aux redémarrages Render si /tmp non purgé,
 # ou mieux : monter un Render Disk sur /data)
-PERSIST_FILE = os.environ.get("PERSIST_FILE", "/tmp/ricch_trades.json")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 PAIRS = {
     "BTC/USDT":  {"symbol": "BTCUSDT",  "coingecko": "bitcoin",          "emoji": "₿",  "ref_price": 67000, "vol": 0.028},
@@ -46,30 +51,102 @@ trade_history = []   # liste de trades avec statut (open/tp/sl)
 _open_trades  = {}   # pair → trade en cours pour suivi résolution
 
 
-# ── Persistance JSON ─────────────────────────────────────────────────────────
+# ── Persistance Neon (PostgreSQL) ─────────────────────────────────────────────
+
+def _get_conn():
+    """Ouvre une connexion Neon depuis DATABASE_URL."""
+    if not DATABASE_URL or not psycopg2:
+        return None
+    try:
+        return psycopg2.connect(DATABASE_URL, sslmode="require")
+    except Exception as e:
+        print(f"⚠ Neon connexion échouée : {e}")
+        return None
+
+def _init_db():
+    """Crée la table trades si elle n'existe pas."""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS trades (
+                    id          SERIAL PRIMARY KEY,
+                    data        JSONB NOT NULL,
+                    is_open     BOOLEAN DEFAULT FALSE,
+                    pair        TEXT,
+                    created_at  TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+        print("✅ Table Neon initialisée")
+    except Exception as e:
+        print(f"⚠ Neon init table : {e}")
+    finally:
+        conn.close()
 
 def _load_persist():
-    """Charge trade_history et _open_trades depuis le fichier JSON au démarrage."""
+    """Charge trade_history et _open_trades depuis Neon au démarrage."""
     global trade_history, _open_trades
+    conn = _get_conn()
+    if not conn:
+        print("⚠ Pas de DATABASE_URL — persistance désactivée")
+        return
     try:
-        if os.path.exists(PERSIST_FILE):
-            with open(PERSIST_FILE, "r") as f:
-                data = json.load(f)
-            trade_history = data.get("trade_history", [])
-            _open_trades  = data.get("open_trades", {})
-            print(f"✅ Persistance chargée : {len(trade_history)} trades, {len(_open_trades)} ouverts")
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT data, is_open, pair FROM trades ORDER BY id ASC")
+            rows = cur.fetchall()
+        trade_history = [dict(r["data"]) for r in rows]
+        _open_trades  = {r["pair"]: dict(r["data"]) for r in rows if r["is_open"]}
+        print(f"✅ Neon chargé : {len(trade_history)} trades, {len(_open_trades)} ouverts")
     except Exception as e:
-        print(f"⚠ Erreur chargement persistance : {e}")
+        print(f"⚠ Erreur chargement Neon : {e}")
+    finally:
+        conn.close()
+
+def _save_trade(trade: dict, is_open: bool = False):
+    """Insère ou met à jour un trade dans Neon."""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            # Upsert basé sur l'id du trade
+            cur.execute("""
+                INSERT INTO trades (data, is_open, pair)
+                VALUES (%s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (json.dumps(trade), is_open, trade.get("pair")))
+        conn.commit()
+    except Exception as e:
+        print(f"⚠ Erreur save trade Neon : {e}")
+    finally:
+        conn.close()
+
+def _update_trade(trade: dict):
+    """Met à jour un trade existant (TP/SL touché) en cherchant par id."""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE trades SET data = %s, is_open = FALSE
+                WHERE data->>'id' = %s
+            """, (json.dumps(trade), str(trade.get("id"))))
+        conn.commit()
+    except Exception as e:
+        print(f"⚠ Erreur update trade Neon : {e}")
+    finally:
+        conn.close()
 
 def _save_persist():
-    """Sauvegarde trade_history et _open_trades dans le fichier JSON."""
-    try:
-        with open(PERSIST_FILE, "w") as f:
-            json.dump({"trade_history": trade_history, "open_trades": _open_trades}, f)
-    except Exception as e:
-        print(f"⚠ Erreur sauvegarde persistance : {e}")
+    """Alias de compatibilité — ne fait rien, les saves sont maintenant atomiques."""
+    pass
 
-# Chargement au démarrage du module
+# Initialisation et chargement au démarrage du module
+_init_db()
 _load_persist()
 
 
@@ -301,7 +378,7 @@ def run_signals_loop():
                         t["exit_time"] = datetime.now(timezone.utc).isoformat()
                         t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
                         del _open_trades[pair]
-                        _save_persist()
+                        _update_trade(t)
                         print(f"  ✅ {pair} TP touché @ {price:.4f}")
                     elif price <= t["sl"] and t["sl"] > 0:
                         t["status"]    = "SL ❌"
@@ -309,7 +386,7 @@ def run_signals_loop():
                         t["exit_time"] = datetime.now(timezone.utc).isoformat()
                         t["pnl_pct"]   = round((price - t["entry"]) / t["entry"] * 100, 2)
                         del _open_trades[pair]
-                        _save_persist()
+                        _update_trade(t)
                         print(f"  ❌ {pair} SL touché @ {price:.4f}")
 
                 # ── Nouveau signal achat ──
@@ -334,7 +411,7 @@ def run_signals_loop():
                     }
                     trade_history.append(trade)
                     _open_trades[pair] = trade
-                    _save_persist()
+                    _save_trade(trade, is_open=True)
 
                 # ── Nouveau signal alléger ──
                 elif "ALLÉGER" in current_sig and previous_signals[pair] != current_sig:
@@ -358,7 +435,7 @@ def run_signals_loop():
                         "pnl_pct":     None,
                     }
                     trade_history.append(trade)
-                    _save_persist()
+                    _save_trade(trade, is_open=False)
 
                 previous_signals[pair] = current_sig
 
