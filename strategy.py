@@ -8,6 +8,7 @@ import requests
 import os
 import json
 import time
+import uuid
 from datetime import datetime, timezone, timedelta
 try:
     import psycopg2
@@ -64,7 +65,7 @@ def _get_conn():
         return None
 
 def _init_db():
-    """Crée la table trades si elle n'existe pas."""
+    """Crée la table trades si elle n'existe pas, avec migration colonne trade_id."""
     conn = _get_conn()
     if not conn:
         return
@@ -73,14 +74,24 @@ def _init_db():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS trades (
                     id          SERIAL PRIMARY KEY,
+                    trade_id    TEXT UNIQUE,
                     data        JSONB NOT NULL,
                     is_open     BOOLEAN DEFAULT FALSE,
                     pair        TEXT,
                     created_at  TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
+            # Migration douce : ajoute trade_id si absent (table existante)
+            cur.execute("""
+                ALTER TABLE trades ADD COLUMN IF NOT EXISTS trade_id TEXT UNIQUE
+            """)
+            # Backfill des anciens rows sans trade_id
+            cur.execute("""
+                UPDATE trades SET trade_id = id::TEXT
+                WHERE trade_id IS NULL
+            """)
         conn.commit()
-        print("✅ Table Neon initialisée")
+        print("✅ Table Neon initialisée / migrée")
     except Exception as e:
         print(f"⚠ Neon init table : {e}")
     finally:
@@ -106,36 +117,45 @@ def _load_persist():
         conn.close()
 
 def _save_trade(trade: dict, is_open: bool = False):
-    """Insère ou met à jour un trade dans Neon."""
+    """Insère un trade dans Neon (upsert par trade_id UUID)."""
     conn = _get_conn()
     if not conn:
         return
     try:
+        trade_id = str(trade.get("id", ""))
         with conn.cursor() as cur:
-            # Upsert basé sur l'id du trade
             cur.execute("""
-                INSERT INTO trades (data, is_open, pair)
-                VALUES (%s, %s, %s)
-                ON CONFLICT DO NOTHING
-            """, (json.dumps(trade), is_open, trade.get("pair")))
+                INSERT INTO trades (trade_id, data, is_open, pair)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (trade_id) DO UPDATE
+                    SET data = EXCLUDED.data,
+                        is_open = EXCLUDED.is_open
+            """, (trade_id, json.dumps(trade), is_open, trade.get("pair")))
         conn.commit()
+        print(f"  💾 Trade sauvegardé Neon : {trade.get('pair')} id={trade_id[:8]}")
     except Exception as e:
         print(f"⚠ Erreur save trade Neon : {e}")
     finally:
         conn.close()
 
 def _update_trade(trade: dict):
-    """Met à jour un trade existant (TP/SL touché) en cherchant par id."""
+    """Clôture un trade (TP/SL touché) en cherchant par trade_id UUID."""
     conn = _get_conn()
     if not conn:
         return
     try:
+        trade_id = str(trade.get("id", ""))
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE trades SET data = %s, is_open = FALSE
-                WHERE data->>'id' = %s
-            """, (json.dumps(trade), str(trade.get("id"))))
+                WHERE trade_id = %s
+            """, (json.dumps(trade), trade_id))
+            updated = cur.rowcount
         conn.commit()
+        if updated:
+            print(f"  💾 Trade clôturé Neon : {trade.get('pair')} id={trade_id[:8]} → {trade.get('status')}")
+        else:
+            print(f"  ⚠ Trade non trouvé pour update : {trade.get('pair')} id={trade_id[:8]}")
     except Exception as e:
         print(f"⚠ Erreur update trade Neon : {e}")
     finally:
@@ -474,15 +494,18 @@ def run_signals_loop():
                     msg = format_signal_message(pair, price, sig)
                     send_telegram(msg)
                     trade = {
-                        "id":         len(trade_history) + 1,
+                        "id":         str(uuid.uuid4()),
                         "pair":       pair,
                         "action":     "ACHAT",
+                        "strategy":   sig.get("strategy", "EMA Pullback"),
                         "entry":      round(price, 4),
                         "sl":         sig.get("sl", 0),
                         "tp":         sig.get("tp", 0),
                         "sl_pct":     sig.get("sl_pct", 0),
                         "tp_pct":     sig.get("tp_pct", 0),
                         "rsi":        sig.get("rsi", 0),
+                        "amount_eur": sig.get("amount_eur", 0),
+                        "risk_eur":   sig.get("risk_eur", 0),
                         "time":       datetime.now(timezone.utc).isoformat(),
                         "status":     "Ouvert 🔵",
                         "exit_price": None,
@@ -498,7 +521,7 @@ def run_signals_loop():
                     msg = format_signal_message(pair, price, sig)
                     send_telegram(msg)
                     trade = {
-                        "id":          len(trade_history) + 1,
+                        "id":          str(uuid.uuid4()),
                         "pair":        pair,
                         "action":      "VENTE",
                         "entry":       round(price, 4),
